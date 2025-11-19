@@ -1,0 +1,29 @@
+---
+description: Reglas obligatorias para validación via Form Requests
+globs: ["app/Http/Requests/**/*.php"]
+alwaysApply: true
+---
+
+# Reglas – Validación
+
+## Obligatorio
+- Validar SIEMPRE con Form Requests
+- Nunca validar en controladores
+- Mensajes en español
+- Reglas explícitas, sin validaciones ambiguas
+
+## Estructura
+- `authorize()` → true o política
+- `rules()` → reglas estrictas
+- `messages()` → mensajes claros
+
+## Ejemplo Correcto
+```php
+public function rules()
+{
+    return [
+        'cabana_id' => 'required|exists:cabanas,id',
+        'fecha_inicio' => 'required|date|after_or_equal:today',
+        'fecha_fin' => 'required|date|after:fecha_inicio',
+    ];
+}

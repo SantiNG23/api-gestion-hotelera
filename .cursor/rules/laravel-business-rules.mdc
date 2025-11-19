@@ -1,0 +1,26 @@
+---
+description: Reglas de negocio clave (reservas, disponibilidad, flujos críticos)
+globs: ["app/Services/**/*.php"]
+alwaysApply: true
+---
+
+# Reglas – Lógica de Negocio
+
+## Verificación de Disponibilidad
+Regla: una cabaña no puede reservarse si hay reserva existente en ese rango.
+
+Debe implementarse con una única query eficiente (sin loops).
+
+## Reservas
+- Toda reserva debe generar un código único (`RES-XXXXXX`)
+- Los procesos de crear/actualizar reservas deben ser transaccionales
+- Registrar logs en operaciones críticas
+
+## Estados de Reserva
+Valores permitidos:
+- `pendiente`
+- `confirmada`
+- `cancelada`
+
+## Regla de Oro
+**No permitir lógica en controladores ni modelos. Solo en servicios.**

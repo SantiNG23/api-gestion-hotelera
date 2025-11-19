@@ -1,0 +1,33 @@
+---
+description: Estructura REST y convenciones de rutas/controladores en Laravel 12
+globs: ["app/Http/Controllers/**/*.php", "routes/api.php"]
+alwaysApply: true
+---
+
+# Reglas – API REST en Laravel 12
+
+## Naming Conventions
+- Controllers: plural + “Controller” → `CabanasController`
+- Models: singular, PascalCase → `Reserva`, `ImagenCabana`
+- Rutas API: plural, kebab-case → `/api/reservas`
+- Variables: camelCase → `$precioTotal`
+- Constantes: UPPER_SNAKE → `ESTADO_PENDIENTE`
+
+## Estructura de Rutas REST
+- `GET /resource` → index
+- `GET /resource/{id}` → show
+- `POST /resource` → store
+- `PUT /resource/{id}` → update
+- `DELETE /resource/{id}` → destroy
+
+## Estructura de Controlador API
+- Extiende `Controller`
+- Importa el Trait `ApiResponse`
+- Solo orquesta lógica → no deberá contener lógica de negocio
+- Cada método debe llamar a un Service (si existe)
+
+## Formato de Respuesta
+Todas las respuestas deben usar:
+```php
+return $this->successResponse($data, 'Mensaje');
+return $this->errorResponse('Mensaje', $errors, 422);

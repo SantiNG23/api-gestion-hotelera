@@ -1,0 +1,25 @@
+---
+description: Reglas para Service Layer y lógica de negocio separada
+globs: ["app/Services/**/*.php"]
+alwaysApply: true
+---
+
+# Reglas – Service Layer
+
+## Principios
+- Los controladores solo orquestan
+- Los servicios implementan reglas de negocio
+- Los modelos manejan persistencia
+- Cada servicio debe ser single-responsibility
+
+## Estructura de Servicio
+```php
+class ReservasService
+{
+    public function crearReserva(array $data)
+    {
+        return DB::transaction(function () use ($data) {
+            // disponibilidad, creación, logs
+        });
+    }
+}

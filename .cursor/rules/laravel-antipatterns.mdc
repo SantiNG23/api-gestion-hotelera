@@ -1,0 +1,19 @@
+---
+description: Anti-patrones prohibidos en backend Laravel
+globs: ["app/**/*.php"]
+alwaysApply: true
+---
+
+# Anti-Patrones – PROHIBIDO
+
+❌ Validar en controladores  
+❌ Lógica de negocio en controladores  
+❌ Exponer IDs autoincrementales  
+❌ Exponer excepciones sin sanitizar  
+❌ Usar select *  
+❌ Repetir queries en loops (N+1)  
+❌ Crear servicios gigantes con responsabilidades mezcladas  
+❌ Mensajes de error técnicos al usuario  
+❌ No usar transacciones en lógica crítica  
+❌ Usar helper request() dentro de servicios  
+❌ No manejar estados inválidos (pendiente/confirmada/cancelada)  

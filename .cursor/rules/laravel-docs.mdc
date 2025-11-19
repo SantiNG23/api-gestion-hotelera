@@ -1,0 +1,19 @@
+---
+description: Reglas para documentación interna, comentarios y logs
+globs: ["app/**/*.php"]
+alwaysApply: true
+---
+
+# Reglas – Documentación
+
+## Comentarios
+- Solo para explicar decisiones complejas
+- No comentar código obvio
+
+## PHPDoc
+- Requerido en métodos complejos
+- Tipos estrictos
+
+## Logs
+- Log info para eventos críticos
+- Log error con contexto
