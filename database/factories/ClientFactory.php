@@ -32,5 +32,25 @@ class ClientFactory extends Factory
             'email' => fake()->optional(0.7)->safeEmail(),
         ];
     }
-}
 
+    /**
+     * Estado eliminado (soft delete)
+     */
+    public function deleted(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'deleted_at' => now(),
+        ]);
+    }
+
+    /**
+     * Datos mínimos requeridos (solo name y dni)
+     */
+    public function minimalData(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'name' => fake()->name(),
+            'dni' => fake()->unique()->numerify('########'),
+        ]);
+    }
+}

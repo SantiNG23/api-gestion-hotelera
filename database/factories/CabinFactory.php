@@ -40,5 +40,25 @@ class CabinFactory extends Factory
             'is_active' => false,
         ]);
     }
-}
 
+    /**
+     * Estado eliminado (soft delete)
+     */
+    public function deleted(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'deleted_at' => now(),
+        ]);
+    }
+
+    /**
+     * Datos mínimos requeridos (name y capacity básica)
+     */
+    public function minimalData(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'name' => 'Cabaña ' . fake()->randomElement(['del Bosque', 'del Lago', 'del Sol', 'de la Montaña', 'del Valle']),
+            'capacity' => fake()->numberBetween(2, 8),
+        ]);
+    }
+}

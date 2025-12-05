@@ -52,5 +52,24 @@ class FeatureFactory extends Factory
             'is_active' => false,
         ]);
     }
-}
 
+    /**
+     * Estado eliminado (soft delete)
+     */
+    public function deleted(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'deleted_at' => now(),
+        ]);
+    }
+
+    /**
+     * Datos mínimos requeridos (solo name)
+     */
+    public function minimalData(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'name' => fake()->randomElement(['Pileta', 'Cochera', 'WiFi', 'Aire Acondicionado', 'Parrilla', 'TV', 'Cocina Equipada', 'Ropa de Cama']),
+        ]);
+    }
+}
