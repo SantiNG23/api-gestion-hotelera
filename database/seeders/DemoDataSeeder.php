@@ -8,7 +8,9 @@ use App\Models\Cabin;
 use App\Models\Client;
 use App\Models\Feature;
 use App\Models\Tenant;
+use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DemoDataSeeder extends Seeder
 {
@@ -21,6 +23,17 @@ class DemoDataSeeder extends Seeder
         $tenant = Tenant::first() ?? Tenant::factory()->create([
             'name' => 'Demo Tenant',
         ]);
+
+        // Crear usuario admin de prueba si no existe
+        if (! User::where('name', 'admin')->exists()) {
+            User::create([
+                'name' => 'admin',
+                'email' => 'admin@example.com',
+                'password' => Hash::make('Admin123!'),
+                'tenant_id' => $tenant->id,
+            ]);
+            $this->command->info('Admin user created: admin / Admin123!');
+        }
 
         $this->seedClients($tenant);
         $this->seedFeatures($tenant);

@@ -187,6 +187,12 @@ abstract class Service
             unset($filters['global']);
         }
 
+        // Extraer y aplicar el filtro de búsqueda simple si existe
+        if (! empty($filters['search'])) {
+            $this->applySimpleSearch($query, $filters['search']);
+            unset($filters['search']);
+        }
+
         foreach ($filters as $field => $value) {
             // Ignorar valores vacíos o nulos
             if ($value === '' || $value === null) {
@@ -326,5 +332,53 @@ abstract class Service
     protected function getGlobalSearchRelations(): array
     {
         return [];
+    }
+
+    /**
+     * Aplica una búsqueda simple a la consulta (solo devuelve ID y campo de nombre)
+     *
+     * @param  Builder  $query  La consulta a la que aplicar el filtro
+     * @param  string  $value  El valor a buscar
+     * @return Builder La consulta con el filtro aplicado
+     */
+    protected function applySimpleSearch(Builder $query, string $value): Builder
+    {
+        $value = strtolower($value);
+        $nameField = $this->getSimpleSearchNameField();
+        $selectFields = $this->getSimpleSearchSelectFields();
+
+        // Seleccionar los campos configurados
+        $query->select($selectFields);
+
+        // Aplicar filtro en el campo de nombre
+        $query->where($nameField, 'like', "%{$value}%");
+
+        return $query;
+    }
+
+    /**
+     * Devuelve el campo que representa el "nombre" para búsquedas simples
+     *
+     * Este método debe ser sobrescrito en las clases hijas para definir
+     * qué campo se considera como el "nombre" de la entidad.
+     *
+     * @return string Nombre del campo que representa el nombre de la entidad
+     */
+    protected function getSimpleSearchNameField(): string
+    {
+        return 'name';
+    }
+
+    /**
+     * Devuelve los campos que se deben seleccionar en búsquedas simples
+     *
+     * Este método puede ser sobrescrito en las clases hijas para definir
+     * qué campos se incluyen en la respuesta de búsqueda simple.
+     *
+     * @return array Lista de campos a seleccionar
+     */
+    protected function getSimpleSearchSelectFields(): array
+    {
+        return ['id', $this->getSimpleSearchNameField()];
     }
 }
