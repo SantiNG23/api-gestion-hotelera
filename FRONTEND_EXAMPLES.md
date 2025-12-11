@@ -3,39 +3,41 @@
 ## 1. Crear un Grupo de Precio
 
 ### Request
+
 ```javascript
 // POST /api/v1/price-groups
 const priceGroup = {
-  name: "Temporada Alta",
-  price_per_night: 250.50,
-  priority: 20,  // Opcional, default: 0
-  is_default: false
+    name: "Temporada Alta",
+    price_per_night: 250.5,
+    priority: 20, // Opcional, default: 0
+    is_default: false,
 };
 
-fetch('/api/v1/price-groups', {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify(priceGroup)
-})
+fetch("/api/v1/price-groups", {
+    method: "POST",
+    headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+    },
+    body: JSON.stringify(priceGroup),
+});
 ```
 
 ### Response (201 Created)
+
 ```json
 {
-  "success": true,
-  "message": "Grupo de precio creado exitosamente",
-  "data": {
-    "id": 1,
-    "name": "Temporada Alta",
-    "price_per_night": 250.50,
-    "priority": 20,
-    "is_default": false,
-    "created_at": "2025-12-11T20:30:00.000000Z",
-    "updated_at": "2025-12-11T20:30:00.000000Z"
-  }
+    "success": true,
+    "message": "Grupo de precio creado exitosamente",
+    "data": {
+        "id": 1,
+        "name": "Temporada Alta",
+        "price_per_night": 250.5,
+        "priority": 20,
+        "is_default": false,
+        "created_at": "2025-12-11T20:30:00.000000Z",
+        "updated_at": "2025-12-11T20:30:00.000000Z"
+    }
 }
 ```
 
@@ -44,44 +46,46 @@ fetch('/api/v1/price-groups', {
 ## 2. Crear un Rango de Precio
 
 ### Request
+
 ```javascript
 // POST /api/v1/price-ranges
 const priceRange = {
-  price_group_id: 1,
-  start_date: "2025-01-01",  // Formato Y-m-d
-  end_date: "2025-01-31"     // Formato Y-m-d
+    price_group_id: 1,
+    start_date: "2025-01-01", // Formato Y-m-d
+    end_date: "2025-01-31", // Formato Y-m-d
 };
 
-fetch('/api/v1/price-ranges', {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify(priceRange)
-})
+fetch("/api/v1/price-ranges", {
+    method: "POST",
+    headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+    },
+    body: JSON.stringify(priceRange),
+});
 ```
 
 ### Response (201 Created)
+
 ```json
 {
-  "success": true,
-  "message": "Rango de precio creado exitosamente",
-  "data": {
-    "id": 5,
-    "price_group_id": 1,
-    "start_date": "2025-01-01",
-    "end_date": "2025-01-31",
-    "price_group": {
-      "id": 1,
-      "name": "Temporada Alta",
-      "price_per_night": 250.50,
-      "priority": 20,
-      "is_default": false
-    },
-    "created_at": "2025-12-11T20:35:00.000000Z",
-    "updated_at": "2025-12-11T20:35:00.000000Z"
-  }
+    "success": true,
+    "message": "Rango de precio creado exitosamente",
+    "data": {
+        "id": 5,
+        "price_group_id": 1,
+        "start_date": "2025-01-01",
+        "end_date": "2025-01-31",
+        "price_group": {
+            "id": 1,
+            "name": "Temporada Alta",
+            "price_per_night": 250.5,
+            "priority": 20,
+            "is_default": false
+        },
+        "created_at": "2025-12-11T20:35:00.000000Z",
+        "updated_at": "2025-12-11T20:35:00.000000Z"
+    }
 }
 ```
 
@@ -90,67 +94,72 @@ fetch('/api/v1/price-ranges', {
 ## 3. Obtener Tarifas Aplicables (NUEVO - MÁS IMPORTANTE)
 
 ### Request
+
 ```javascript
 // GET /api/v1/price-ranges/applicable-rates?start_date=2025-01-01&end_date=2025-01-31
 const startDate = "2025-01-01";
 const endDate = "2025-01-31";
 
-fetch(`/api/v1/price-ranges/applicable-rates?start_date=${startDate}&end_date=${endDate}`, {
-  method: 'GET',
-  headers: {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  }
-})
-.then(res => res.json())
-.then(data => {
-  // Aquí recibes los datos del precio ganador
-  console.log(data.data.rates);
-})
+fetch(
+    `/api/v1/price-ranges/applicable-rates?start_date=${startDate}&end_date=${endDate}`,
+    {
+        method: "GET",
+        headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+        },
+    }
+)
+    .then((res) => res.json())
+    .then((data) => {
+        // Aquí recibes los datos del precio ganador
+        console.log(data.data.rates);
+    });
 ```
 
 ### Response (200 OK)
+
 ```json
 {
-  "success": true,
-  "message": null,
-  "data": {
-    "start_date": "2025-01-01",
-    "end_date": "2025-01-31",
-    "rates": {
-      "2025-01-01": 100.00,
-      "2025-01-02": 100.00,
-      "2025-01-03": 100.00,
-      "2025-01-04": 100.00,
-      "2025-01-05": 100.00,
-      "2025-01-06": 100.00,
-      "2025-01-07": 100.00,
-      "2025-01-08": 200.00,
-      "2025-01-09": 200.00,
-      "2025-01-10": 200.00,
-      "2025-01-11": 200.00,
-      "2025-01-12": 200.00,
-      "2025-01-13": 200.00,
-      "2025-01-14": 200.00,
-      "2025-01-15": 150.00,
-      "2025-01-16": 150.00,
-      "2025-01-17": 150.00,
-      "2025-01-18": 100.00,
-      "2025-01-19": 100.00,
-      "2025-01-20": 100.00,
-      "2025-01-21": 100.00,
-      "2025-01-22": 100.00,
-      "2025-01-23": 100.00,
-      "2025-01-24": 100.00,
-      "2025-01-25": 100.00,
-      "2025-01-26": 100.00,
-      "2025-01-27": 100.00,
-      "2025-01-28": 100.00,
-      "2025-01-29": 100.00,
-      "2025-01-30": 100.00,
-      "2025-01-31": 100.00
+    "success": true,
+    "message": null,
+    "data": {
+        "start_date": "2025-01-01",
+        "end_date": "2025-01-31",
+        "rates": {
+            "2025-01-01": 100.0,
+            "2025-01-02": 100.0,
+            "2025-01-03": 100.0,
+            "2025-01-04": 100.0,
+            "2025-01-05": 100.0,
+            "2025-01-06": 100.0,
+            "2025-01-07": 100.0,
+            "2025-01-08": 200.0,
+            "2025-01-09": 200.0,
+            "2025-01-10": 200.0,
+            "2025-01-11": 200.0,
+            "2025-01-12": 200.0,
+            "2025-01-13": 200.0,
+            "2025-01-14": 200.0,
+            "2025-01-15": 150.0,
+            "2025-01-16": 150.0,
+            "2025-01-17": 150.0,
+            "2025-01-18": 100.0,
+            "2025-01-19": 100.0,
+            "2025-01-20": 100.0,
+            "2025-01-21": 100.0,
+            "2025-01-22": 100.0,
+            "2025-01-23": 100.0,
+            "2025-01-24": 100.0,
+            "2025-01-25": 100.0,
+            "2025-01-26": 100.0,
+            "2025-01-27": 100.0,
+            "2025-01-28": 100.0,
+            "2025-01-29": 100.0,
+            "2025-01-30": 100.0,
+            "2025-01-31": 100.0
+        }
     }
-  }
 }
 ```
 
@@ -159,6 +168,7 @@ fetch(`/api/v1/price-ranges/applicable-rates?start_date=${startDate}&end_date=${
 ## 4. Ejemplo Completo - Vue.js / React
 
 ### Vue.js
+
 ```javascript
 // store/priceStore.js
 export const state = {
@@ -189,9 +199,9 @@ export const actions = {
           }
         }
       );
-      
+
       const json = await response.json();
-      
+
       if (json.success) {
         // ✅ Aquí recibes rates con las claves en formato YYYY-MM-DD
         commit('SET_APPLICABLE_RATES', json.data.rates);
@@ -219,7 +229,7 @@ export const actions = {
       });
 
       const json = await response.json();
-      
+
       if (json.success) {
         return json.data;  // Contiene: id, name, price_per_night, priority, is_default
       }
@@ -244,7 +254,7 @@ export const actions = {
       });
 
       const json = await response.json();
-      
+
       if (json.success) {
         return json.data;  // Contiene: id, price_group_id, start_date, end_date, created_at
       }
@@ -307,7 +317,7 @@ export default {
   },
   methods: {
     ...mapActions('price', ['fetchApplicableRates', 'createPriceGroup', 'createPriceRange']),
-    
+
     async handleCreateGroup() {
       await this.createPriceGroup(this.form);
       this.form.name = '';
@@ -390,190 +400,225 @@ button:hover {
 ```
 
 ### React
+
 ```javascript
 // hooks/usePriceRates.js
-import { useState, useCallback } from 'react';
+import { useState, useCallback } from "react";
 
 export const usePriceRates = () => {
-  const [applicableRates, setApplicableRates] = useState({});
-  const [priceGroups, setPriceGroups] = useState([]);
-  const [loading, setLoading] = useState(false);
+    const [applicableRates, setApplicableRates] = useState({});
+    const [priceGroups, setPriceGroups] = useState([]);
+    const [loading, setLoading] = useState(false);
 
-  const fetchApplicableRates = useCallback(async (startDate, endDate) => {
-    setLoading(true);
-    try {
-      const response = await fetch(
-        `/api/v1/price-ranges/applicable-rates?start_date=${startDate}&end_date=${endDate}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          }
+    const fetchApplicableRates = useCallback(async (startDate, endDate) => {
+        setLoading(true);
+        try {
+            const response = await fetch(
+                `/api/v1/price-ranges/applicable-rates?start_date=${startDate}&end_date=${endDate}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${localStorage.getItem(
+                            "token"
+                        )}`,
+                        "Content-Type": "application/json",
+                    },
+                }
+            );
+
+            const json = await response.json();
+
+            if (json.success) {
+                // ✅ rates es un objeto con claves en formato YYYY-MM-DD
+                setApplicableRates(json.data.rates);
+                return json.data.rates;
+            }
+        } catch (error) {
+            console.error("Error fetching rates:", error);
+        } finally {
+            setLoading(false);
         }
-      );
+    }, []);
 
-      const json = await response.json();
-      
-      if (json.success) {
-        // ✅ rates es un objeto con claves en formato YYYY-MM-DD
-        setApplicableRates(json.data.rates);
-        return json.data.rates;
-      }
-    } catch (error) {
-      console.error('Error fetching rates:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    const createPriceGroup = useCallback(async (groupData) => {
+        try {
+            const response = await fetch("/api/v1/price-groups", {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem("token")}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    name: groupData.name,
+                    price_per_night: groupData.price_per_night,
+                    priority: groupData.priority || 0, // ✅ Campo: priority
+                    is_default: groupData.is_default || false,
+                }),
+            });
 
-  const createPriceGroup = useCallback(async (groupData) => {
-    try {
-      const response = await fetch('/api/v1/price-groups', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: groupData.name,
-          price_per_night: groupData.price_per_night,
-          priority: groupData.priority || 0,  // ✅ Campo: priority
-          is_default: groupData.is_default || false
-        })
-      });
+            const json = await response.json();
 
-      const json = await response.json();
-      
-      if (json.success) {
-        return json.data;  // { id, name, price_per_night, priority, is_default, ... }
-      }
-    } catch (error) {
-      console.error('Error creating price group:', error);
-    }
-  }, []);
+            if (json.success) {
+                return json.data; // { id, name, price_per_night, priority, is_default, ... }
+            }
+        } catch (error) {
+            console.error("Error creating price group:", error);
+        }
+    }, []);
 
-  const createPriceRange = useCallback(async (rangeData) => {
-    try {
-      const response = await fetch('/api/v1/price-ranges', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          price_group_id: rangeData.price_group_id,
-          start_date: rangeData.start_date,  // ✅ Formato: YYYY-MM-DD
-          end_date: rangeData.end_date        // ✅ Formato: YYYY-MM-DD
-        })
-      });
+    const createPriceRange = useCallback(async (rangeData) => {
+        try {
+            const response = await fetch("/api/v1/price-ranges", {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem("token")}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    price_group_id: rangeData.price_group_id,
+                    start_date: rangeData.start_date, // ✅ Formato: YYYY-MM-DD
+                    end_date: rangeData.end_date, // ✅ Formato: YYYY-MM-DD
+                }),
+            });
 
-      const json = await response.json();
-      
-      if (json.success) {
-        return json.data;  // { id, price_group_id, start_date, end_date, ... }
-      }
-    } catch (error) {
-      console.error('Error creating price range:', error);
-    }
-  }, []);
+            const json = await response.json();
 
-  return {
-    applicableRates,
-    priceGroups,
-    loading,
-    fetchApplicableRates,
-    createPriceGroup,
-    createPriceRange
-  };
+            if (json.success) {
+                return json.data; // { id, price_group_id, start_date, end_date, ... }
+            }
+        } catch (error) {
+            console.error("Error creating price range:", error);
+        }
+    }, []);
+
+    return {
+        applicableRates,
+        priceGroups,
+        loading,
+        fetchApplicableRates,
+        createPriceGroup,
+        createPriceRange,
+    };
 };
 
 // PriceCalendar.jsx
-import React, { useState, useEffect } from 'react';
-import { usePriceRates } from './hooks/usePriceRates';
+import React, { useState, useEffect } from "react";
+import { usePriceRates } from "./hooks/usePriceRates";
 
 const PriceCalendar = () => {
-  const { applicableRates, fetchApplicableRates, createPriceGroup, createPriceRange } = usePriceRates();
-  const [formGroup, setFormGroup] = useState({
-    name: '',
-    price_per_night: 0,
-    priority: 0
-  });
-  const [formRange, setFormRange] = useState({
-    price_group_id: null,
-    start_date: '',
-    end_date: ''
-  });
+    const {
+        applicableRates,
+        fetchApplicableRates,
+        createPriceGroup,
+        createPriceRange,
+    } = usePriceRates();
+    const [formGroup, setFormGroup] = useState({
+        name: "",
+        price_per_night: 0,
+        priority: 0,
+    });
+    const [formRange, setFormRange] = useState({
+        price_group_id: null,
+        start_date: "",
+        end_date: "",
+    });
 
-  useEffect(() => {
-    // Cargar tarifas al montar el componente
-    const today = new Date();
-    const startDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
-    const endDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-31`;
-    fetchApplicableRates(startDate, endDate);
-  }, []);
+    useEffect(() => {
+        // Cargar tarifas al montar el componente
+        const today = new Date();
+        const startDate = `${today.getFullYear()}-${String(
+            today.getMonth() + 1
+        ).padStart(2, "0")}-01`;
+        const endDate = `${today.getFullYear()}-${String(
+            today.getMonth() + 1
+        ).padStart(2, "0")}-31`;
+        fetchApplicableRates(startDate, endDate);
+    }, []);
 
-  const handleCreateGroup = async (e) => {
-    e.preventDefault();
-    await createPriceGroup(formGroup);
-    setFormGroup({ name: '', price_per_night: 0, priority: 0 });
-  };
+    const handleCreateGroup = async (e) => {
+        e.preventDefault();
+        await createPriceGroup(formGroup);
+        setFormGroup({ name: "", price_per_night: 0, priority: 0 });
+    };
 
-  const handleCreateRange = async (e) => {
-    e.preventDefault();
-    await createPriceRange(formRange);
-    setFormRange({ price_group_id: null, start_date: '', end_date: '' });
-  };
+    const handleCreateRange = async (e) => {
+        e.preventDefault();
+        await createPriceRange(formRange);
+        setFormRange({ price_group_id: null, start_date: "", end_date: "" });
+    };
 
-  return (
-    <div className="price-calendar">
-      <div className="rates-grid">
-        {Object.entries(applicableRates).map(([date, price]) => (
-          <div key={date} className="rate-day">
-            <span className="date">{new Date(date + 'T00:00:00').toLocaleDateString('es-ES')}</span>
-            <span className="price">${price.toFixed(2)}</span>
-          </div>
-        ))}
-      </div>
+    return (
+        <div className="price-calendar">
+            <div className="rates-grid">
+                {Object.entries(applicableRates).map(([date, price]) => (
+                    <div key={date} className="rate-day">
+                        <span className="date">
+                            {new Date(date + "T00:00:00").toLocaleDateString(
+                                "es-ES"
+                            )}
+                        </span>
+                        <span className="price">${price.toFixed(2)}</span>
+                    </div>
+                ))}
+            </div>
 
-      <form onSubmit={handleCreateGroup}>
-        <h3>Crear Grupo de Precio</h3>
-        <input
-          type="text"
-          placeholder="Nombre"
-          value={formGroup.name}
-          onChange={(e) => setFormGroup({ ...formGroup, name: e.target.value })}
-        />
-        <input
-          type="number"
-          placeholder="Precio por noche"
-          value={formGroup.price_per_night}
-          onChange={(e) => setFormGroup({ ...formGroup, price_per_night: parseFloat(e.target.value) })}
-        />
-        <input
-          type="number"
-          placeholder="Prioridad (opcional)"
-          value={formGroup.priority}
-          onChange={(e) => setFormGroup({ ...formGroup, priority: parseInt(e.target.value) })}
-        />
-        <button type="submit">Crear</button>
-      </form>
+            <form onSubmit={handleCreateGroup}>
+                <h3>Crear Grupo de Precio</h3>
+                <input
+                    type="text"
+                    placeholder="Nombre"
+                    value={formGroup.name}
+                    onChange={(e) =>
+                        setFormGroup({ ...formGroup, name: e.target.value })
+                    }
+                />
+                <input
+                    type="number"
+                    placeholder="Precio por noche"
+                    value={formGroup.price_per_night}
+                    onChange={(e) =>
+                        setFormGroup({
+                            ...formGroup,
+                            price_per_night: parseFloat(e.target.value),
+                        })
+                    }
+                />
+                <input
+                    type="number"
+                    placeholder="Prioridad (opcional)"
+                    value={formGroup.priority}
+                    onChange={(e) =>
+                        setFormGroup({
+                            ...formGroup,
+                            priority: parseInt(e.target.value),
+                        })
+                    }
+                />
+                <button type="submit">Crear</button>
+            </form>
 
-      <form onSubmit={handleCreateRange}>
-        <h3>Crear Rango de Precio</h3>
-        <input
-          type="date"
-          value={formRange.start_date}
-          onChange={(e) => setFormRange({ ...formRange, start_date: e.target.value })}
-        />
-        <input
-          type="date"
-          value={formRange.end_date}
-          onChange={(e) => setFormRange({ ...formRange, end_date: e.target.value })}
-        />
-        <button type="submit">Crear</button>
-      </form>
-    </div>
-  );
+            <form onSubmit={handleCreateRange}>
+                <h3>Crear Rango de Precio</h3>
+                <input
+                    type="date"
+                    value={formRange.start_date}
+                    onChange={(e) =>
+                        setFormRange({
+                            ...formRange,
+                            start_date: e.target.value,
+                        })
+                    }
+                />
+                <input
+                    type="date"
+                    value={formRange.end_date}
+                    onChange={(e) =>
+                        setFormRange({ ...formRange, end_date: e.target.value })
+                    }
+                />
+                <button type="submit">Crear</button>
+            </form>
+        </div>
+    );
 };
 
 export default PriceCalendar;
@@ -586,6 +631,7 @@ export default PriceCalendar;
 ### ✅ Campos EXACTOS que recibirás del Backend
 
 **Grupo de Precio (PriceGroup):**
+
 ```javascript
 {
   id: number,
@@ -599,6 +645,7 @@ export default PriceCalendar;
 ```
 
 **Rango de Precio (PriceRange):**
+
 ```javascript
 {
   id: number,
@@ -618,6 +665,7 @@ export default PriceCalendar;
 ```
 
 **Tarifas Aplicables (Response):**
+
 ```javascript
 {
   success: boolean,
@@ -639,23 +687,27 @@ export default PriceCalendar;
 ## 6. Casos de Error
 
 ### Validación fallida
+
 ```json
 {
-  "success": false,
-  "message": "Error de validación",
-  "data": {
-    "errors": {
-      "start_date": ["La fecha de inicio debe ser hoy o posterior"],
-      "end_date": ["La fecha de fin debe ser posterior a la fecha de inicio"]
+    "success": false,
+    "message": "Error de validación",
+    "data": {
+        "errors": {
+            "start_date": ["La fecha de inicio debe ser hoy o posterior"],
+            "end_date": [
+                "La fecha de fin debe ser posterior a la fecha de inicio"
+            ]
+        }
     }
-  }
 }
 ```
 
 ### No autenticado
+
 ```json
 {
-  "message": "Unauthenticated"
+    "message": "Unauthenticated"
 }
 ```
 
@@ -663,13 +715,12 @@ export default PriceCalendar;
 
 ## 7. Resumen para el Frontend
 
-| Campo | Tipo | Obligatorio | Ejemplo |
-|-------|------|-------------|---------|
-| `name` (grupo) | string | ✅ | "Temporada Alta" |
-| `price_per_night` | number | ✅ | 250.50 |
-| `priority` | number | ❌ | 20 |
-| `is_default` | boolean | ❌ | false |
-| `price_group_id` | number | ✅ | 1 |
-| `start_date` | string | ✅ | "2025-01-01" |
-| `end_date` | string | ✅ | "2025-01-31" |
-
+| Campo             | Tipo    | Obligatorio | Ejemplo          |
+| ----------------- | ------- | ----------- | ---------------- |
+| `name` (grupo)    | string  | ✅          | "Temporada Alta" |
+| `price_per_night` | number  | ✅          | 250.50           |
+| `priority`        | number  | ❌          | 20               |
+| `is_default`      | boolean | ❌          | false            |
+| `price_group_id`  | number  | ✅          | 1                |
+| `start_date`      | string  | ✅          | "2025-01-01"     |
+| `end_date`        | string  | ✅          | "2025-01-31"     |
