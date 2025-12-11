@@ -47,6 +47,48 @@ class PriceGroupApiTest extends TestCase
         ]);
     }
 
+    public function test_can_create_price_group_with_priority(): void
+    {
+        $data = [
+            'name' => 'Temporada Premium',
+            'price_per_night' => 250.00,
+            'priority' => 20,
+        ];
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/v1/price-groups', $data);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('data.name', 'Temporada Premium')
+            ->assertJsonPath('data.priority', 20);
+
+        $this->assertDatabaseHas('price_groups', [
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Temporada Premium',
+            'priority' => 20,
+        ]);
+    }
+
+    public function test_price_group_default_priority_is_zero(): void
+    {
+        $data = [
+            'name' => 'Tarifa Base',
+            'price_per_night' => 100,
+        ];
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/v1/price-groups', $data);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('data.priority', 0);
+
+        $this->assertDatabaseHas('price_groups', [
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Tarifa Base',
+            'priority' => 0,
+        ]);
+    }
+
     public function test_can_create_default_price_group(): void
     {
         $data = [

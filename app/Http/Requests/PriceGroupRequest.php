@@ -16,6 +16,7 @@ class PriceGroupRequest extends ApiRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'price_per_night' => ['required', 'numeric', 'min:0', 'max:999999.99'],
+            'priority' => ['sometimes', 'integer', 'min:0'],
             'is_default' => ['sometimes', 'boolean'],
         ];
     }

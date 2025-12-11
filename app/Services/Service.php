@@ -208,6 +208,10 @@ abstract class Service
             $method = 'filterBy' . ucfirst($camelField);
 
             if (method_exists($this, $method)) {
+                // Castear a int si el valor es un string numérico
+                if (is_string($value) && is_numeric($value)) {
+                    $value = (int) $value;
+                }
                 $this->$method($query, $value);
             } else {
                 // Verificar que el campo existe en la tabla antes de usarlo
