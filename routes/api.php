@@ -59,6 +59,7 @@ Route::prefix('v1')->group(function () {
 
         // Tarifas
         Route::apiResource('price-groups', PriceGroupController::class);
+        Route::get('price-ranges/applicable-rates', [PriceRangeController::class, 'getApplicableRates'])->name('price-ranges.applicable-rates');
         Route::apiResource('price-ranges', PriceRangeController::class);
 
         // Reservas

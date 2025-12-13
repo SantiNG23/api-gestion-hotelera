@@ -52,13 +52,6 @@ class PriceRangeService extends Service
         $priceGroup = PriceGroup::findOrFail($data['price_group_id']);
         $data['tenant_id'] = $priceGroup->tenant_id;
 
-        // Validar solapamiento de fechas
-        $this->validateNoOverlap(
-            $data['start_date'],
-            $data['end_date'],
-            $data['tenant_id']
-        );
-
         return $this->create($data);
     }
 
@@ -73,16 +66,6 @@ class PriceRangeService extends Service
 
         if (isset($data['price_group_id'])) {
             $this->validatePriceGroupTenant($data['price_group_id']);
-        }
-
-        // Validar solapamiento de fechas (excluyendo el rango actual)
-        if (isset($data['start_date']) || isset($data['end_date'])) {
-            $this->validateNoOverlap(
-                $data['start_date'] ?? $priceRange->start_date->format('Y-m-d'),
-                $data['end_date'] ?? $priceRange->end_date->format('Y-m-d'),
-                $priceRange->tenant_id,
-                $id
-            );
         }
 
         return $this->update($id, $data);
@@ -109,6 +92,78 @@ class PriceRangeService extends Service
     }
 
     /**
+     * Obtiene las tarifas aplicables para un rango de fechas con algoritmo de prioridad
+     *
+     * Algoritmo: Para cada día en el rango, selecciona el precio ganador basado en:
+     * 1. Prioridad del grupo (DESC) - mayor prioridad gana
+     * 2. created_at del rango (DESC) - el más reciente gana en caso de empate
+     *
+     * @return array<string, float> Array con formato ["2025-01-01" => 150.00, ...]
+     */
+    public function getApplicableRates(
+        string $startDate,
+        string $endDate,
+        ?int $tenantId = null
+    ): array {
+        $start = Carbon::parse($startDate)->startOfDay();
+        $end = Carbon::parse($endDate)->endOfDay();
+
+        if (!$tenantId) {
+            $tenantId = Auth::user()?->tenant_id;
+        }
+
+        // Obtener todos los rangos que tocan el período
+        $priceRanges = $this->model
+            ->withoutGlobalScope('tenant')
+            ->where('tenant_id', $tenantId)
+            ->where('end_date', '>=', $start)
+            ->where('start_date', '<=', $end)
+            ->with(['priceGroup' => function ($query) {
+                $query->withoutGlobalScope('tenant');
+            }])
+            ->get();
+
+        $result = [];
+        $currentDate = $start->copy();
+
+        // Iterar por cada día del rango
+        while ($currentDate <= $end) {
+            $dayString = $currentDate->format('Y-m-d');
+
+            // Filtrar rangos activos para este día
+            $activePriceRanges = $priceRanges->filter(function ($range) use ($currentDate) {
+                return $range->start_date <= $currentDate->toDate()
+                    && $range->end_date >= $currentDate->toDate();
+            });
+
+            if ($activePriceRanges->isNotEmpty()) {
+                // Ordenar por prioridad DESC, luego por created_at DESC
+                $winnerRange = $activePriceRanges
+                    ->sortByDesc(function ($range) {
+                        return $range->priceGroup->priority;
+                    })
+                    ->values()
+                    ->first();
+
+                // Si hay múltiples con la misma prioridad, seleccionar el más reciente
+                $sameMaxPriority = $activePriceRanges->filter(function ($range) use ($winnerRange) {
+                    return $range->priceGroup->priority === $winnerRange->priceGroup->priority;
+                });
+
+                if ($sameMaxPriority->count() > 1) {
+                    $winnerRange = $sameMaxPriority->sortByDesc('created_at')->first();
+                }
+
+                $result[$dayString] = (float) $winnerRange->priceGroup->price_per_night;
+            }
+
+            $currentDate->addDay();
+        }
+
+        return $result;
+    }
+
+    /**
      * Valida que el grupo de precio pertenezca al tenant actual
      *
      * @throws ValidationException
@@ -128,42 +183,6 @@ class PriceRangeService extends Service
         if ($tenantId && $priceGroup->tenant_id !== $tenantId) {
             throw ValidationException::withMessages([
                 'price_group_id' => ['El grupo de precio no pertenece a este tenant'],
-            ]);
-        }
-    }
-
-    /**
-     * Valida que no haya solapamiento de fechas con otros rangos
-     *
-     * @throws ValidationException
-     */
-    private function validateNoOverlap(
-        string $startDate,
-        string $endDate,
-        int $tenantId,
-        ?int $excludeId = null
-    ): void {
-        $query = $this->model
-            ->withoutGlobalScope('tenant')
-            ->where('tenant_id', $tenantId)
-            ->where(function (Builder $q) use ($startDate, $endDate) {
-                // El nuevo rango se solapa si:
-                // - Su inicio está dentro de un rango existente
-                // - Su fin está dentro de un rango existente
-                // - Envuelve completamente un rango existente
-                $q->where(function ($q2) use ($startDate, $endDate) {
-                    $q2->whereDate('start_date', '<=', $endDate)
-                        ->whereDate('end_date', '>=', $startDate);
-                });
-            });
-
-        if ($excludeId) {
-            $query->where('id', '!=', $excludeId);
-        }
-
-        if ($query->exists()) {
-            throw ValidationException::withMessages([
-                'start_date' => ['Las fechas se solapan con otro rango de precios existente'],
             ]);
         }
     }

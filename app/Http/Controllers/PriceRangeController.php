@@ -81,5 +81,32 @@ class PriceRangeController extends Controller
 
         return $this->successResponse(null, 'Rango de precio eliminado exitosamente');
     }
+
+    /**
+     * Obtiene las tarifas aplicables para un rango de fechas
+     * con algoritmo de prioridad (precio ganador)
+     *
+     * Query parameters:
+     * - start_date: Fecha de inicio (Y-m-d)
+     * - end_date: Fecha de fin (Y-m-d)
+     */
+    public function getApplicableRates(Request $request): JsonResponse
+    {
+        $request->validate([
+            'start_date' => ['required', 'date_format:Y-m-d'],
+            'end_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:start_date'],
+        ]);
+
+        $rates = $this->priceRangeService->getApplicableRates(
+            $request->input('start_date'),
+            $request->input('end_date')
+        );
+
+        return $this->successResponse([
+            'start_date' => $request->input('start_date'),
+            'end_date' => $request->input('end_date'),
+            'rates' => $rates,
+        ]);
+    }
 }
 

@@ -54,29 +54,36 @@ class PriceRangeApiTest extends TestCase
         ]);
     }
 
-    public function test_cannot_create_overlapping_price_range(): void
+    public function test_can_create_overlapping_price_ranges(): void
     {
         $priceGroup = PriceGroup::factory()->create(['tenant_id' => $this->tenant->id]);
 
         // Crear primer rango
-        PriceRange::factory()->create([
-            'tenant_id' => $this->tenant->id,
+        $firstRange = [
             'price_group_id' => $priceGroup->id,
-            'start_date' => Carbon::tomorrow(),
-            'end_date' => Carbon::tomorrow()->addDays(10),
-        ]);
+            'start_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'end_date' => Carbon::tomorrow()->addDays(10)->format('Y-m-d'),
+        ];
 
-        // Intentar crear rango solapado
-        $data = [
+        $response1 = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/v1/price-ranges', $firstRange);
+
+        $response1->assertStatus(201);
+
+        // Crear rango solapado (esto ahora es permitido)
+        $secondRange = [
             'price_group_id' => $priceGroup->id,
             'start_date' => Carbon::tomorrow()->addDays(5)->format('Y-m-d'),
             'end_date' => Carbon::tomorrow()->addDays(15)->format('Y-m-d'),
         ];
 
-        $response = $this->withHeaders($this->authHeaders())
-            ->postJson('/api/v1/price-ranges', $data);
+        $response2 = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/v1/price-ranges', $secondRange);
 
-        $response->assertStatus(422);
+        $response2->assertStatus(201);
+
+        // Verificar que ambos rangos existen
+        $this->assertDatabaseCount('price_ranges', 2);
     }
 
     public function test_cannot_create_price_range_without_required_fields(): void
@@ -137,6 +144,153 @@ class PriceRangeApiTest extends TestCase
 
         $this->assertApiResponse($response);
         $this->assertSoftDeleted('price_ranges', ['id' => $priceRange->id]);
+    }
+
+    public function test_can_get_applicable_rates_with_single_price_group(): void
+    {
+        $priceGroup = PriceGroup::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'price_per_night' => 100.00,
+            'priority' => 0,
+        ]);
+
+        $startDate = Carbon::tomorrow();
+        $endDate = $startDate->copy()->addDays(5);
+
+        PriceRange::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'price_group_id' => $priceGroup->id,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/price-ranges/applicable-rates?start_date=' . $startDate->format('Y-m-d') . '&end_date=' . $endDate->format('Y-m-d'));
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.start_date', $startDate->format('Y-m-d'))
+            ->assertJsonPath('data.end_date', $endDate->format('Y-m-d'));
+
+        // Verificar que todos los días tienen el precio correcto
+        $rates = $response->json('data.rates');
+        $this->assertCount(6, $rates); // 6 días (inclusivo)
+        foreach ($rates as $price) {
+            $this->assertEquals(100.00, $price);
+        }
+    }
+
+    public function test_applicable_rates_selects_highest_priority(): void
+    {
+        $startDate = Carbon::tomorrow();
+        $endDate = $startDate->copy()->addDays(5);
+
+        // Crear dos grupos de precio con diferentes prioridades
+        $basePriceGroup = PriceGroup::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'price_per_night' => 100.00,
+            'priority' => 0,
+        ]);
+
+        $premiumPriceGroup = PriceGroup::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'price_per_night' => 200.00,
+            'priority' => 10,
+        ]);
+
+        // Crear rango de base que cubre todo el período
+        PriceRange::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'price_group_id' => $basePriceGroup->id,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ]);
+
+        // Crear rango premium que cubre solo los últimos 3 días
+        PriceRange::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'price_group_id' => $premiumPriceGroup->id,
+            'start_date' => $startDate->copy()->addDays(3),
+            'end_date' => $endDate,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/price-ranges/applicable-rates?start_date=' . $startDate->format('Y-m-d') . '&end_date=' . $endDate->format('Y-m-d'));
+
+        $response->assertStatus(200);
+
+        $rates = $response->json('data.rates');
+
+        // Los primeros 3 días deben ser el precio base
+        for ($i = 0; $i < 3; $i++) {
+            $date = $startDate->copy()->addDays($i)->format('Y-m-d');
+            $this->assertEquals(100.00, $rates[$date]);
+        }
+
+        // Los últimos 3 días deben ser el precio premium
+        for ($i = 3; $i < 6; $i++) {
+            $date = $startDate->copy()->addDays($i)->format('Y-m-d');
+            $this->assertEquals(200.00, $rates[$date]);
+        }
+    }
+
+    public function test_applicable_rates_uses_created_at_tiebreaker(): void
+    {
+        $startDate = Carbon::tomorrow();
+        $endDate = $startDate->copy()->addDays(2);
+
+        // Crear dos grupos con la misma prioridad
+        $priceGroup1 = PriceGroup::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'price_per_night' => 100.00,
+            'priority' => 5,
+        ]);
+
+        $priceGroup2 = PriceGroup::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'price_per_night' => 150.00,
+            'priority' => 5,
+        ]);
+
+        // Crear primer rango (será el más antiguo)
+        PriceRange::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'price_group_id' => $priceGroup1->id,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ]);
+
+        // Crear segundo rango (será el más nuevo)
+        sleep(1); // Esperar para garantizar que created_at sea diferente
+        PriceRange::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'price_group_id' => $priceGroup2->id,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/price-ranges/applicable-rates?start_date=' . $startDate->format('Y-m-d') . '&end_date=' . $endDate->format('Y-m-d'));
+
+        $response->assertStatus(200);
+
+        $rates = $response->json('data.rates');
+
+        // El precio ganador debe ser del rango más nuevo (priceGroup2)
+        foreach ($rates as $price) {
+            $this->assertEquals(150.00, $price);
+        }
+    }
+
+    public function test_applicable_rates_returns_empty_for_no_matches(): void
+    {
+        $startDate = Carbon::tomorrow();
+        $endDate = $startDate->copy()->addDays(5);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/price-ranges/applicable-rates?start_date=' . $startDate->format('Y-m-d') . '&end_date=' . $endDate->format('Y-m-d'));
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.rates', []);
     }
 }
 
