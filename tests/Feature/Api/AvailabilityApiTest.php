@@ -197,7 +197,7 @@ class AvailabilityApiTest extends TestCase
         $response->assertJsonPath('data.blocked_ranges.0.from', '2025-01-10');
     }
 
-    public function test_can_get_calendar_days(): void
+    public function test_can_get_calendar_with_reservations(): void
     {
         $cabin2 = Cabin::factory()->create(['tenant_id' => $this->tenant->id]);
         $client = Client::factory()->create(['tenant_id' => $this->tenant->id]);
@@ -232,15 +232,20 @@ class AvailabilityApiTest extends TestCase
         $response->assertJsonPath('data.to', '2025-01-05');
         $response->assertJsonCount(2, 'data.cabins');
 
-        // Verificar estructura del primer día de la primera cabaña (debería ser libre)
+        // Verificar primera cabaña tiene 1 reserva
         $response->assertJsonPath('data.cabins.0.id', $this->cabin->id);
-        $response->assertJsonPath('data.cabins.0.days.0.date', '2025-01-01');
-        $response->assertJsonPath('data.cabins.0.days.0.status', 'free');
+        $response->assertJsonPath('data.cabins.0.name', $this->cabin->name);
+        $response->assertJsonCount(1, 'data.cabins.0.reservations');
 
-        // Verificar segundo día (2025-01-02, debería estar confirmada)
-        $response->assertJsonPath('data.cabins.0.days.1.date', '2025-01-02');
-        $response->assertJsonPath('data.cabins.0.days.1.status', Reservation::STATUS_CONFIRMED);
-        $response->assertJsonPath('data.cabins.0.days.1.reservation_id', 1);
+        // Verificar estructura de la reserva
+        $response->assertJsonPath('data.cabins.0.reservations.0.client_name', $client->name);
+        $response->assertJsonPath('data.cabins.0.reservations.0.check_in_date', '2025-01-02');
+        $response->assertJsonPath('data.cabins.0.reservations.0.check_out_date', '2025-01-05');
+        $response->assertJsonPath('data.cabins.0.reservations.0.status', Reservation::STATUS_CONFIRMED);
+
+        // Verificar segunda cabaña tiene 1 reserva pending
+        $response->assertJsonCount(1, 'data.cabins.1.reservations');
+        $response->assertJsonPath('data.cabins.1.reservations.0.status', Reservation::STATUS_PENDING_CONFIRMATION);
     }
 
     public function test_calendar_days_requires_dates(): void
@@ -270,4 +275,3 @@ class AvailabilityApiTest extends TestCase
         $response->assertStatus(422);
     }
 }
-

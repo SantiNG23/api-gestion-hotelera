@@ -86,7 +86,7 @@ class AvailabilityController extends Controller
     }
 
     /**
-     * Obtiene el calendario de disponibilidad con vista día a día
+     * Obtiene el calendario de disponibilidad con reservas agrupadas por cabaña
      *
      * GET /availability/calendar?from=2025-01-01&to=2025-01-31
      */
@@ -98,7 +98,7 @@ class AvailabilityController extends Controller
 
             $calendar = $this->availabilityService->getCalendarDays($from, $to);
 
-            return $this->successResponse($calendar);
+            return $this->successResponse($calendar, 'Operación exitosa');
         } catch (\Exception $e) {
             return $this->handleError($e);
         }

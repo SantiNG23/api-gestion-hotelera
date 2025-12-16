@@ -30,7 +30,7 @@ class ReservationResource extends ApiResource
 
             // Relaciones
             'client' => $this->whenLoaded('client', fn () => new ClientResource($this->client)),
-            'cabin' => $this->whenLoaded('cabin', fn () => new CabinResource($this->cabin)),
+            'cabin' => $this->whenLoaded('cabin', fn () => new SimpleCabinResource($this->cabin)),
             'guests' => $this->whenLoaded('guests', fn () => ReservationGuestResource::collection($this->guests)),
             'payments' => $this->whenLoaded('payments', fn () => ReservationPaymentResource::collection($this->payments)),
 

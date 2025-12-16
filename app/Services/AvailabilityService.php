@@ -139,7 +139,7 @@ class AvailabilityService
                 'from' => $reservation->check_in_date->format('Y-m-d'),
                 'to' => $reservation->check_out_date->format('Y-m-d'),
                 'status' => $reservation->status,
-                'reservation_id' => $reservation->id,
+                'id' => $reservation->id,
             ];
         })->values()->toArray();
 
@@ -152,7 +152,7 @@ class AvailabilityService
     }
 
     /**
-     * Obtiene el calendario de disponibilidad en formato día a día
+     * Obtiene el calendario de disponibilidad con reservas agrupadas por cabaña
      * Formato para el endpoint /availability/calendar
      *
      * @param  Carbon  $from  Fecha desde
@@ -164,19 +164,39 @@ class AvailabilityService
         $cabins = Cabin::where('is_active', true)->get();
 
         $calendarCabins = $cabins->map(function (Cabin $cabin) use ($from, $to) {
-            $days = [];
-            $current = $from->clone();
-
-            while ($current->lte($to)) {
-                $dayStatus = $this->getDayStatus($cabin->id, $current);
-                $days[] = $dayStatus;
-                $current->addDay();
-            }
+            // Obtener reservas que se solapan con el rango de fechas
+            $reservations = Reservation::where('cabin_id', $cabin->id)
+                ->whereIn('status', Reservation::BLOCKING_STATUSES)
+                ->where(function ($q) use ($from, $to) {
+                    $q->whereDate('check_in_date', '<', $to)
+                        ->whereDate('check_out_date', '>', $from);
+                })
+                ->where(function ($q) {
+                    $q->where('status', '!=', Reservation::STATUS_PENDING_CONFIRMATION)
+                        ->orWhere(function ($q2) {
+                            $q2->where('status', Reservation::STATUS_PENDING_CONFIRMATION)
+                                ->where(function ($q3) {
+                                    $q3->whereNull('pending_until')
+                                        ->orWhere('pending_until', '>', now());
+                                });
+                        });
+                })
+                ->with('client')
+                ->orderBy('check_in_date')
+                ->get();
 
             return [
                 'id' => $cabin->id,
                 'name' => $cabin->name,
-                'days' => $days,
+                'reservations' => $reservations->map(function (Reservation $reservation) {
+                    return [
+                        'id' => $reservation->id,
+                        'client_name' => $reservation->client->name,
+                        'check_in_date' => $reservation->check_in_date->format('Y-m-d'),
+                        'check_out_date' => $reservation->check_out_date->format('Y-m-d'),
+                        'status' => $reservation->status,
+                    ];
+                })->values()->toArray(),
             ];
         })->values()->toArray();
 
