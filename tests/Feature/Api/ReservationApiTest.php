@@ -49,7 +49,14 @@ class ReservationApiTest extends TestCase
     public function test_can_create_reservation(): void
     {
         $data = [
-            'client_id' => $this->client->id,
+            'client' => [
+                'name' => $this->client->name,
+                'dni' => $this->client->dni,
+                'age' => $this->client->age,
+                'city' => $this->client->city,
+                'phone' => $this->client->phone,
+                'email' => $this->client->email,
+            ],
             'cabin_id' => $this->cabin->id,
             'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
             'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
@@ -61,7 +68,6 @@ class ReservationApiTest extends TestCase
 
         $response->assertStatus(201)
             ->assertJsonPath('data.status', 'pending_confirmation')
-            ->assertJsonPath('data.client_id', $this->client->id)
             ->assertJsonPath('data.cabin_id', $this->cabin->id);
 
         // Verificar que se calculó el precio (3 noches x 100 = 300)
@@ -73,7 +79,10 @@ class ReservationApiTest extends TestCase
     public function test_can_create_reservation_with_guests(): void
     {
         $data = [
-            'client_id' => $this->client->id,
+            'client' => [
+                'name' => $this->client->name,
+                'dni' => $this->client->dni,
+            ],
             'cabin_id' => $this->cabin->id,
             'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
             'check_out_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
@@ -103,7 +112,10 @@ class ReservationApiTest extends TestCase
 
         // Intentar crear reserva solapada
         $data = [
-            'client_id' => $this->client->id,
+            'client' => [
+                'name' => $this->client->name,
+                'dni' => $this->client->dni,
+            ],
             'cabin_id' => $this->cabin->id,
             'check_in_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
             'check_out_date' => Carbon::tomorrow()->addDays(7)->format('Y-m-d'),
@@ -121,7 +133,7 @@ class ReservationApiTest extends TestCase
             ->postJson('/api/v1/reservations', []);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['client_id', 'cabin_id', 'check_in_date', 'check_out_date']);
+            ->assertJsonValidationErrors(['client', 'cabin_id', 'check_in_date', 'check_out_date']);
     }
 
     public function test_can_show_reservation(): void
@@ -419,7 +431,7 @@ class ReservationApiTest extends TestCase
             'status' => Reservation::STATUS_CANCELLED,
         ]);
 
-        // Filtrar por rango + estado confirmado
+        // Filtrar por rango + estado confirmado (usa factory para crear, no POST)
         $response = $this->withHeaders($this->authHeaders())
             ->getJson('/api/v1/reservations?start_date=' . Carbon::now()->addDays(5)->format('Y-m-d') . '&end_date=' . Carbon::now()->addDays(20)->format('Y-m-d') . '&status=confirmed');
 
