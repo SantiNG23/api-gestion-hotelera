@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\Client;
 use App\Models\Reservation;
 use App\Models\ReservationPayment;
 use Carbon\Carbon;
@@ -63,9 +64,15 @@ class ReservationService extends Service
         $priceDetails = $this->priceCalculator->calculatePrice($checkIn, $checkOut);
 
         return DB::transaction(function () use ($data, $priceDetails) {
+            $tenantId = $data['tenant_id'] ?? Auth::user()->tenant_id;
+            $client = $this->resolveClient(
+                $tenantId,
+                $data['client'] ?? null
+            );
+
             $reservation = $this->create([
-                'tenant_id' => $data['tenant_id'] ?? Auth::user()->tenant_id,
-                'client_id' => $data['client_id'],
+                'tenant_id' => $tenantId,
+                'client_id' => $client->id,
                 'cabin_id' => $data['cabin_id'],
                 'check_in_date' => $data['check_in_date'],
                 'check_out_date' => $data['check_out_date'],
@@ -123,6 +130,16 @@ class ReservationService extends Service
             $data['total_price'] = $priceDetails['total'];
             $data['deposit_amount'] = $priceDetails['deposit'];
             $data['balance_amount'] = $priceDetails['balance'];
+        }
+
+        // Resolver cliente si se envía client
+        if (isset($data['client'])) {
+            $tenantId = $reservation->tenant_id ?? Auth::user()->tenant_id;
+            $client = $this->resolveClient(
+                $tenantId,
+                $data['client']
+            );
+            $data['client_id'] = $client->id;
         }
 
         return DB::transaction(function () use ($reservation, $data) {
@@ -193,7 +210,45 @@ class ReservationService extends Service
     }
 
     /**
+     * Paga el saldo diferido de forma anticipada
+     * El cliente paga antes de llegar, sin cambiar el estado de la reserva
+     *
+     * @throws ValidationException
+     */
+    public function payBalance(int $id, array $paymentData): Reservation
+    {
+        $reservation = $this->getById($id);
+
+        // Solo se puede pagar el saldo si la reserva está confirmada
+        if (!$reservation->isConfirmed()) {
+            throw ValidationException::withMessages([
+                'status' => ['Solo se puede pagar el saldo en reservas confirmadas'],
+            ]);
+        }
+
+        if ($reservation->hasBalancePaid()) {
+            throw ValidationException::withMessages([
+                'payment' => ['El saldo ya fue registrado'],
+            ]);
+        }
+
+        return DB::transaction(function () use ($reservation, $paymentData) {
+            // Registrar pago de saldo (sin cambiar estado)
+            ReservationPayment::create([
+                'reservation_id' => $reservation->id,
+                'amount' => $reservation->balance_amount,
+                'payment_type' => ReservationPayment::TYPE_BALANCE,
+                'payment_method' => $paymentData['payment_method'] ?? null,
+                'paid_at' => $paymentData['paid_at'] ?? now(),
+            ]);
+
+            return $reservation->fresh(['client', 'cabin', 'guests', 'payments']);
+        });
+    }
+
+    /**
      * Realiza el check-in (pago de saldo)
+     * Flujo principal: cliente paga todo al llegar
      *
      * @throws ValidationException
      */
@@ -207,12 +262,16 @@ class ReservationService extends Service
             ]);
         }
 
+        // Si el saldo ya fue pagado (pagó anticipadamente), solo cambiar estado
         if ($reservation->hasBalancePaid()) {
-            throw ValidationException::withMessages([
-                'payment' => ['El saldo ya fue registrado'],
+            $reservation->update([
+                'status' => Reservation::STATUS_CHECKED_IN,
             ]);
+
+            return $reservation->fresh(['client', 'cabin', 'guests', 'payments']);
         }
 
+        // Si no, registrar el pago de saldo al momento del check-in
         return DB::transaction(function () use ($reservation, $paymentData) {
             // Registrar pago de saldo
             ReservationPayment::create([
@@ -354,6 +413,22 @@ class ReservationService extends Service
     }
 
     /**
+     * Filtro por fecha de check-in (desde X fecha)
+     */
+    protected function filterByCheckInDate(Builder $query, string $value): Builder
+    {
+        return $query->whereDate('check_in_date', $value);
+    }
+
+    /**
+     * Filtro por fecha de check-out (hasta X fecha)
+     */
+    protected function filterByCheckOutDate(Builder $query, string $value): Builder
+    {
+        return $query->whereDate('check_out_date', $value);
+    }
+
+    /**
      * Campo de fecha para filtros de rango
      */
     protected function getDateColumn(): string
@@ -378,5 +453,66 @@ class ReservationService extends Service
             'client' => ['name', 'dni'],
             'cabin' => ['name'],
         ];
+    }
+
+    /**
+     * Obtiene o crea un cliente a partir de client_id o datos de cliente
+     */
+    private function resolveClient(int $tenantId, ?array $clientData): Client
+    {
+        if ($clientData === null) {
+            throw ValidationException::withMessages([
+                'client' => ['Los datos del cliente son obligatorios'],
+            ]);
+        }
+
+        $existing = Client::where('tenant_id', $tenantId)
+            ->where('dni', $clientData['dni'])
+            ->first();
+
+        if ($existing !== null) {
+            // Sincronizar datos básicos cuando el cliente ya existe
+            $updatableFields = ['name', 'age', 'city', 'phone', 'email'];
+            $updateData = [];
+
+            foreach ($updatableFields as $field) {
+                if (!array_key_exists($field, $clientData)) {
+                    continue;
+                }
+
+                $value = $clientData[$field];
+
+                // No sobreescribimos con null ni con strings vacíos
+                if ($value === null) {
+                    continue;
+                }
+                if (is_string($value)) {
+                    $value = trim($value);
+                    if ($value === '') {
+                        continue;
+                    }
+                }
+
+                if ($existing->{$field} !== $value) {
+                    $updateData[$field] = $value;
+                }
+            }
+
+            if (!empty($updateData)) {
+                $existing->update($updateData);
+            }
+
+            return $existing;
+        }
+
+        return Client::create([
+            'tenant_id' => $tenantId,
+            'name' => $clientData['name'],
+            'dni' => $clientData['dni'],
+            'age' => $clientData['age'] ?? null,
+            'city' => $clientData['city'] ?? null,
+            'phone' => $clientData['phone'] ?? null,
+            'email' => $clientData['email'] ?? null,
+        ]);
     }
 }
