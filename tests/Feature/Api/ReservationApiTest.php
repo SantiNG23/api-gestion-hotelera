@@ -187,6 +187,89 @@ class ReservationApiTest extends TestCase
         $response->assertStatus(422);
     }
 
+    public function test_can_pay_balance_anticipadamente(): void
+    {
+        $reservation = Reservation::factory()->confirmed()->create([
+            'tenant_id' => $this->tenant->id,
+            'client_id' => $this->client->id,
+            'cabin_id' => $this->cabin->id,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson("/api/v1/reservations/{$reservation->id}/pay-balance", [
+                'payment_method' => 'tarjeta_credito',
+            ]);
+
+        $this->assertApiResponse($response);
+        // El estado debe mantenerse como "confirmed", no pasar a "checked_in"
+        $response->assertJsonPath('data.status', 'confirmed');
+        $response->assertJsonPath('data.has_balance_paid', true);
+    }
+
+    public function test_cannot_pay_balance_if_already_paid(): void
+    {
+        $reservation = Reservation::factory()->confirmed()->create([
+            'tenant_id' => $this->tenant->id,
+            'client_id' => $this->client->id,
+            'cabin_id' => $this->cabin->id,
+        ]);
+
+        // Pagar la primera vez
+        $this->withHeaders($this->authHeaders())
+            ->postJson("/api/v1/reservations/{$reservation->id}/pay-balance", [
+                'payment_method' => 'transferencia',
+            ]);
+
+        // Intentar pagar de nuevo
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson("/api/v1/reservations/{$reservation->id}/pay-balance", [
+                'payment_method' => 'transferencia',
+            ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_cannot_pay_balance_if_not_confirmed(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'client_id' => $this->client->id,
+            'cabin_id' => $this->cabin->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson("/api/v1/reservations/{$reservation->id}/pay-balance", [
+                'payment_method' => 'efectivo',
+            ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_can_check_in_after_paying_balance_anticipadamente(): void
+    {
+        $reservation = Reservation::factory()->confirmed()->create([
+            'tenant_id' => $this->tenant->id,
+            'client_id' => $this->client->id,
+            'cabin_id' => $this->cabin->id,
+        ]);
+
+        // Pagar saldo anticipadamente
+        $this->withHeaders($this->authHeaders())
+            ->postJson("/api/v1/reservations/{$reservation->id}/pay-balance", [
+                'payment_method' => 'transferencia',
+            ]);
+
+        // Check-in sin necesidad de pagar de nuevo
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson("/api/v1/reservations/{$reservation->id}/check-in", [
+                'payment_method' => 'n/a',
+            ]);
+
+        $this->assertApiResponse($response);
+        $response->assertJsonPath('data.status', 'checked_in');
+    }
+
     public function test_can_check_in_reservation(): void
     {
         $reservation = Reservation::factory()->confirmed()->create([
