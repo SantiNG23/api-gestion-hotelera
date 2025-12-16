@@ -437,6 +437,37 @@ class ReservationService extends Service
     }
 
     /**
+     * Aplica un filtro de rango de fechas que devuelve reservas con días solapados
+     *
+     * Este método sobrescribe el del Service base para filtrar por intersección de fechas.
+     * Una reserva se incluye si tiene al menos un día en común con el rango [start, end].
+     *
+     * @param  Builder  $query  La consulta a la que aplicar el filtro
+     * @param  array  $dateRange  Array con las claves 'start' y 'end'
+     * @param  string|null  $dateColumn  Ignorado en este contexto (se usan check_in_date y check_out_date)
+     */
+    protected function applyDateRangeFilter(Builder $query, array $dateRange, ?string $dateColumn = null): void
+    {
+        $start = $dateRange['start'] ?? null;
+        $end = $dateRange['end'] ?? null;
+
+        if (!empty($start) && !empty($end)) {
+            // Ambas fechas: devolver reservas que se solapen con el rango
+            // Una reserva se solapa si: check_in_date <= end AND check_out_date >= start
+            $query->where(function ($q) use ($start, $end) {
+                $q->whereDate('check_in_date', '<=', $end)
+                    ->whereDate('check_out_date', '>=', $start);
+            });
+        } elseif (!empty($start)) {
+            // Solo inicio: devolver reservas cuya check_out_date >= start
+            $query->whereDate('check_out_date', '>=', $start);
+        } elseif (!empty($end)) {
+            // Solo fin: devolver reservas cuya check_in_date <= end
+            $query->whereDate('check_in_date', '<=', $end);
+        }
+    }
+
+    /**
      * Columnas para búsqueda global
      */
     protected function getGlobalSearchColumns(): array

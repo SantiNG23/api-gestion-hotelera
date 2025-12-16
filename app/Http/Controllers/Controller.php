@@ -107,10 +107,27 @@ class Controller extends BaseController
     }
 
     /**
+     * Extrae los parámetros de rango de fechas de la solicitud
+     *
+     * @param  Request  $request  Solicitud HTTP
+     * @return array Parámetros de rango de fechas (start y end)
+     */
+    protected function getDateRangeParams(Request $request): array
+    {
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+
+        return [
+            'start' => $startDate && $startDate !== '' ? $startDate : null,
+            'end' => $endDate && $endDate !== '' ? $endDate : null,
+        ];
+    }
+
+    /**
      * Combina todos los parámetros de consulta en un único array
      *
      * @param  Request  $request  Solicitud HTTP
-     * @return array Parámetros combinados de paginación, ordenamiento y filtros
+     * @return array Parámetros combinados de paginación, ordenamiento, filtros y rango de fechas
      */
     protected function getQueryParams(Request $request): array
     {
@@ -118,6 +135,7 @@ class Controller extends BaseController
             ...$this->getPaginationParams($request),
             ...$this->getSortingParams($request),
             'filters' => $this->getFilterParams($request),
+            'date_range' => $this->getDateRangeParams($request),
         ];
     }
 }

@@ -317,5 +317,115 @@ class ReservationApiTest extends TestCase
         $this->assertPaginatedResponse($response);
         $response->assertJsonCount(2, 'data');
     }
-}
 
+    public function test_can_filter_reservations_by_date_range_fully_within(): void
+    {
+        // Crear una reserva del 10 al 15
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'client_id' => $this->client->id,
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::now()->addDays(10),
+            'check_out_date' => Carbon::now()->addDays(15),
+        ]);
+
+        // Filtrar por rango que envuelve la reserva (5 al 20)
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/reservations?start_date=' . Carbon::now()->addDays(5)->format('Y-m-d') . '&end_date=' . Carbon::now()->addDays(20)->format('Y-m-d'));
+
+        $this->assertPaginatedResponse($response);
+        $response->assertJsonCount(1, 'data');
+        $response->assertJsonPath('data.0.id', $reservation->id);
+    }
+
+    public function test_can_filter_reservations_by_date_range_starts_before_ends_within(): void
+    {
+        // Crear una reserva del 10 al 15
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'client_id' => $this->client->id,
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::now()->addDays(10),
+            'check_out_date' => Carbon::now()->addDays(15),
+        ]);
+
+        // Filtrar por rango que comienza antes y termina dentro (5 al 12)
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/reservations?start_date=' . Carbon::now()->addDays(5)->format('Y-m-d') . '&end_date=' . Carbon::now()->addDays(12)->format('Y-m-d'));
+
+        $this->assertPaginatedResponse($response);
+        $response->assertJsonCount(1, 'data');
+        $response->assertJsonPath('data.0.id', $reservation->id);
+    }
+
+    public function test_can_filter_reservations_by_date_range_starts_within_ends_after(): void
+    {
+        // Crear una reserva del 10 al 15
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'client_id' => $this->client->id,
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::now()->addDays(10),
+            'check_out_date' => Carbon::now()->addDays(15),
+        ]);
+
+        // Filtrar por rango que comienza dentro y termina después (12 al 20)
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/reservations?start_date=' . Carbon::now()->addDays(12)->format('Y-m-d') . '&end_date=' . Carbon::now()->addDays(20)->format('Y-m-d'));
+
+        $this->assertPaginatedResponse($response);
+        $response->assertJsonCount(1, 'data');
+        $response->assertJsonPath('data.0.id', $reservation->id);
+    }
+
+    public function test_can_filter_reservations_by_date_range_no_overlap(): void
+    {
+        // Crear una reserva del 10 al 15
+        Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'client_id' => $this->client->id,
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::now()->addDays(10),
+            'check_out_date' => Carbon::now()->addDays(15),
+        ]);
+
+        // Filtrar por rango sin solapamiento (20 al 25)
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/reservations?start_date=' . Carbon::now()->addDays(20)->format('Y-m-d') . '&end_date=' . Carbon::now()->addDays(25)->format('Y-m-d'));
+
+        $this->assertPaginatedResponse($response);
+        $response->assertJsonCount(0, 'data');
+    }
+
+    public function test_can_filter_reservations_by_date_range_with_status_filter(): void
+    {
+        // Crear reserva confirmada del 10 al 15
+        $confirmedReservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'client_id' => $this->client->id,
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::now()->addDays(10),
+            'check_out_date' => Carbon::now()->addDays(15),
+            'status' => Reservation::STATUS_CONFIRMED,
+        ]);
+
+        // Crear reserva cancelada del 10 al 15
+        Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'client_id' => $this->client->id,
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::now()->addDays(10),
+            'check_out_date' => Carbon::now()->addDays(15),
+            'status' => Reservation::STATUS_CANCELLED,
+        ]);
+
+        // Filtrar por rango + estado confirmado
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/reservations?start_date=' . Carbon::now()->addDays(5)->format('Y-m-d') . '&end_date=' . Carbon::now()->addDays(20)->format('Y-m-d') . '&status=confirmed');
+
+        $this->assertPaginatedResponse($response);
+        $response->assertJsonCount(1, 'data');
+        $response->assertJsonPath('data.0.id', $confirmedReservation->id);
+        $response->assertJsonPath('data.0.status', 'confirmed');
+    }
+}
