@@ -23,7 +23,7 @@ class ReservationController extends Controller
      */
     protected function getAllowedFilters(): array
     {
-        return ['status', 'client_id', 'cabin_id', 'global'];
+        return ['status', 'client_id', 'cabin_id', 'check_in_date', 'check_out_date', 'global'];
     }
 
     /**
@@ -138,6 +138,19 @@ class ReservationController extends Controller
     }
 
     /**
+     * Pagar saldo diferido (puede ser antes del check-in)
+     */
+    public function payBalance(ReservationPaymentRequest $request, int $id): JsonResponse
+    {
+        $reservation = $this->reservationService->payBalance($id, $request->validated());
+
+        return $this->successResponse(
+            new ReservationResource($reservation),
+            'Saldo pagado exitosamente'
+        );
+    }
+
+    /**
      * Cancelar reserva
      */
     public function cancel(int $id): JsonResponse
@@ -150,4 +163,3 @@ class ReservationController extends Controller
         );
     }
 }
-

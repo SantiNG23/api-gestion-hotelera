@@ -65,6 +65,7 @@ Route::prefix('v1')->group(function () {
         Route::post('reservations/quote', [ReservationController::class, 'quote'])->name('reservations.quote');
         Route::apiResource('reservations', ReservationController::class);
         Route::post('reservations/{reservation}/confirm', [ReservationController::class, 'confirm'])->name('reservations.confirm');
+        Route::post('reservations/{reservation}/pay-balance', [ReservationController::class, 'payBalance'])->name('reservations.pay-balance');
         Route::post('reservations/{reservation}/check-in', [ReservationController::class, 'checkIn'])->name('reservations.check-in');
         Route::post('reservations/{reservation}/check-out', [ReservationController::class, 'checkOut'])->name('reservations.check-out');
         Route::post('reservations/{reservation}/cancel', [ReservationController::class, 'cancel'])->name('reservations.cancel');
