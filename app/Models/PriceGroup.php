@@ -19,7 +19,12 @@ class PriceGroup extends Model
         'tenant_id',
         'name',
         'price_per_night',
+        'priority',
         'is_default',
+    ];
+
+    protected $attributes = [
+        'priority' => 0,
     ];
 
     protected $casts = [
@@ -28,6 +33,7 @@ class PriceGroup extends Model
         'deleted_at' => 'datetime',
         'price_per_night' => 'decimal:2',
         'is_default' => 'boolean',
+        'priority' => 'integer',
     ];
 
     /**
@@ -36,6 +42,17 @@ class PriceGroup extends Model
     public function priceRanges(): HasMany
     {
         return $this->hasMany(PriceRange::class);
+    }
+
+    /**
+     * Hook de inicialización del modelo
+     */
+    protected static function booted(): void
+    {
+        // Eliminar en cascada los rangos de precio cuando se elimina el grupo
+        static::deleting(function ($priceGroup) {
+            $priceGroup->priceRanges()->delete();
+        });
     }
 
     /**
