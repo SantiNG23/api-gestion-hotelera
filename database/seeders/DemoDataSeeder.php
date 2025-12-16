@@ -7,8 +7,11 @@ namespace Database\Seeders;
 use App\Models\Cabin;
 use App\Models\Client;
 use App\Models\Feature;
+use App\Models\PriceGroup;
+use App\Models\PriceRange;
 use App\Models\Tenant;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -35,12 +38,142 @@ class DemoDataSeeder extends Seeder
             $this->command->info('Admin user created: admin / Admin123!');
         }
 
+        $this->seedPricing($tenant);
         $this->seedClients($tenant);
         $this->seedFeatures($tenant);
         $this->seedCabins($tenant);
         $this->seedCabinFeaturesRelationships($tenant);
 
         $this->command->info('Demo data seeded successfully!');
+    }
+
+    /**
+     * Seed pricing structure with groups and ranges for testing
+     */
+    private function seedPricing(Tenant $tenant): void
+    {
+        $this->command->info('Seeding Pricing...');
+
+        // Crear grupos de precios
+        $priceGroups = [
+            [
+                'name' => 'Temporada Baja',
+                'price_per_night' => 80.00,
+                'priority' => 1,
+                'is_default' => false,
+            ],
+            [
+                'name' => 'Temporada Media',
+                'price_per_night' => 120.00,
+                'priority' => 2,
+                'is_default' => false,
+            ],
+            [
+                'name' => 'Temporada Alta',
+                'price_per_night' => 180.00,
+                'priority' => 3,
+                'is_default' => false,
+            ],
+            [
+                'name' => 'Fin de Semana Largo',
+                'price_per_night' => 200.00,
+                'priority' => 4,
+                'is_default' => false,
+            ],
+            [
+                'name' => 'Fiestas y Vacaciones',
+                'price_per_night' => 300.00,
+                'priority' => 5,
+                'is_default' => false,
+            ],
+            [
+                'name' => 'Tarifa por Defecto',
+                'price_per_night' => 100.00,
+                'priority' => 0,
+                'is_default' => true,
+            ],
+        ];
+
+        $groupsCreated = [];
+        foreach ($priceGroups as $groupData) {
+            $groupData['tenant_id'] = $tenant->id;
+            $group = PriceGroup::updateOrCreate(
+                ['tenant_id' => $tenant->id, 'name' => $groupData['name']],
+                $groupData
+            );
+            $groupsCreated[$group->name] = $group;
+        }
+
+        // Crear rangos de precios (cubren varios meses para pruebas realistas)
+        $today = Carbon::now();
+
+        // Rangos de ejemplo que cubren diferentes períodos del año
+        $priceRanges = [
+            // Temporada Media: enero, febrero, marzo (veranos moderados)
+            [
+                'price_group' => 'Temporada Media',
+                'start_date' => $today->copy()->startOfYear()->format('Y-m-d'),
+                'end_date' => $today->copy()->startOfYear()->addMonths(2)->endOfMonth()->format('Y-m-d'),
+            ],
+            // Temporada Baja: abril-junio (invierno)
+            [
+                'price_group' => 'Temporada Baja',
+                'start_date' => $today->copy()->startOfYear()->addMonths(3)->format('Y-m-d'),
+                'end_date' => $today->copy()->startOfYear()->addMonths(5)->endOfMonth()->format('Y-m-d'),
+            ],
+            // Temporada Media: julio-agosto (invierno moderado)
+            [
+                'price_group' => 'Temporada Media',
+                'start_date' => $today->copy()->startOfYear()->addMonths(6)->format('Y-m-d'),
+                'end_date' => $today->copy()->startOfYear()->addMonths(7)->endOfMonth()->format('Y-m-d'),
+            ],
+            // Temporada Alta: septiembre-noviembre (primavera/verano temprano)
+            [
+                'price_group' => 'Temporada Alta',
+                'start_date' => $today->copy()->startOfYear()->addMonths(8)->format('Y-m-d'),
+                'end_date' => $today->copy()->startOfYear()->addMonths(10)->endOfMonth()->format('Y-m-d'),
+            ],
+            // Fiestas: diciembre (navidad y año nuevo)
+            [
+                'price_group' => 'Fiestas y Vacaciones',
+                'start_date' => $today->copy()->startOfYear()->addMonths(11)->format('Y-m-d'),
+                'end_date' => $today->copy()->endOfYear()->format('Y-m-d'),
+            ],
+            // Rango futuro: próximos 6 meses desde hoy
+            [
+                'price_group' => 'Temporada Media',
+                'start_date' => $today->copy()->addMonths(1)->format('Y-m-d'),
+                'end_date' => $today->copy()->addMonths(3)->format('Y-m-d'),
+            ],
+            // Fin de semana largo próximo (si existe)
+            [
+                'price_group' => 'Fin de Semana Largo',
+                'start_date' => $today->copy()->addDays(7)->format('Y-m-d'),
+                'end_date' => $today->copy()->addDays(10)->format('Y-m-d'),
+            ],
+        ];
+
+        foreach ($priceRanges as $rangeData) {
+            $priceGroup = $groupsCreated[$rangeData['price_group']] ?? null;
+            if ($priceGroup) {
+                PriceRange::updateOrCreate(
+                    [
+                        'tenant_id' => $tenant->id,
+                        'price_group_id' => $priceGroup->id,
+                        'start_date' => $rangeData['start_date'],
+                        'end_date' => $rangeData['end_date'],
+                    ],
+                    [
+                        'tenant_id' => $tenant->id,
+                        'price_group_id' => $priceGroup->id,
+                        'start_date' => $rangeData['start_date'],
+                        'end_date' => $rangeData['end_date'],
+                    ]
+                );
+            }
+        }
+
+        $this->command->line('  ✓ Pricing seeded: 6 price groups + multiple price ranges');
     }
 
     /**
