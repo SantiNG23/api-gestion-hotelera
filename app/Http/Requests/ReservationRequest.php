@@ -28,6 +28,7 @@ class ReservationRequest extends ApiRequest
             'check_in_date' => $checkInRules,
             'check_out_date' => $checkOutRules,
             'notes' => ['nullable', 'string', 'max:2000'],
+            'is_blocked' => ['sometimes', 'boolean'],
             'pending_hours' => ['sometimes', 'integer', 'min:1', 'max:72'],
 
             // Cliente (siempre se envía el objeto client)

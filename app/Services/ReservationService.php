@@ -61,9 +61,13 @@ class ReservationService extends Service
         }
 
         // Calcular precios automáticamente
-        $priceDetails = $this->priceCalculator->calculatePrice($checkIn, $checkOut);
+        // Si la reserva está bloqueada, no calcular precio (será 0)
+        $isBlocked = (bool) ($data['is_blocked'] ?? false);
+        $priceDetails = $isBlocked
+            ? ['total' => 0, 'deposit' => 0, 'balance' => 0]
+            : $this->priceCalculator->calculatePrice($checkIn, $checkOut);
 
-        return DB::transaction(function () use ($data, $priceDetails) {
+        return DB::transaction(function () use ($data, $priceDetails, $isBlocked) {
             $tenantId = $data['tenant_id'] ?? Auth::user()->tenant_id;
             $client = $this->resolveClient(
                 $tenantId,
@@ -82,6 +86,7 @@ class ReservationService extends Service
                 'status' => Reservation::STATUS_PENDING_CONFIRMATION,
                 'pending_until' => now()->addHours((int) ($data['pending_hours'] ?? 48)),
                 'notes' => $data['notes'] ?? null,
+                'is_blocked' => $isBlocked,
             ]);
 
             // Crear huéspedes si se proporcionan
@@ -109,15 +114,17 @@ class ReservationService extends Service
             ]);
         }
 
-        // Si cambian las fechas o la cabaña, recalcular precio y validar disponibilidad
+        // Si cambian las fechas, la cabaña o el estado de bloqueo, recalcular precio y validar disponibilidad
         $needsRecalculation = isset($data['check_in_date'])
             || isset($data['check_out_date'])
-            || isset($data['cabin_id']);
+            || isset($data['cabin_id'])
+            || isset($data['is_blocked']);
 
         if ($needsRecalculation) {
             $checkIn = Carbon::parse($data['check_in_date'] ?? $reservation->check_in_date);
             $checkOut = Carbon::parse($data['check_out_date'] ?? $reservation->check_out_date);
             $cabinId = $data['cabin_id'] ?? $reservation->cabin_id;
+            $isBlocked = (bool) ($data['is_blocked'] ?? $reservation->is_blocked);
 
             // Validar disponibilidad (excluyendo la reserva actual)
             if (!$this->availabilityService->isAvailable($cabinId, $checkIn, $checkOut, $reservation->id)) {
@@ -126,10 +133,15 @@ class ReservationService extends Service
                 ]);
             }
 
-            $priceDetails = $this->priceCalculator->calculatePrice($checkIn, $checkOut);
+            // Si está bloqueada, precios en 0; si no, calcular normalmente
+            $priceDetails = $isBlocked
+                ? ['total' => 0, 'deposit' => 0, 'balance' => 0]
+                : $this->priceCalculator->calculatePrice($checkIn, $checkOut);
+
             $data['total_price'] = $priceDetails['total'];
             $data['deposit_amount'] = $priceDetails['deposit'];
             $data['balance_amount'] = $priceDetails['balance'];
+            $data['is_blocked'] = $isBlocked;
         }
 
         // Resolver cliente si se envía client
@@ -153,6 +165,7 @@ class ReservationService extends Service
                 'deposit_amount' => $data['deposit_amount'] ?? null,
                 'balance_amount' => $data['balance_amount'] ?? null,
                 'notes' => $data['notes'] ?? null,
+                'is_blocked' => isset($data['is_blocked']) ? $data['is_blocked'] : null,
             ], fn ($value) => $value !== null);
 
             if (!empty($updateData)) {

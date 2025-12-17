@@ -25,6 +25,7 @@ class ReservationResource extends ApiResource
             'deposit_amount' => (float) $this->deposit_amount,
             'balance_amount' => (float) $this->balance_amount,
             'status' => $this->status,
+            'is_blocked' => $this->is_blocked,
             'pending_until' => $this->pending_until?->format('Y-m-d H:i:s'),
             'notes' => $this->notes,
 

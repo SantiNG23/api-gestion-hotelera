@@ -42,6 +42,7 @@ class Reservation extends Model
         'status',
         'pending_until',
         'notes',
+        'is_blocked',
     ];
 
     protected $casts = [
@@ -54,6 +55,7 @@ class Reservation extends Model
         'deposit_amount' => 'decimal:2',
         'balance_amount' => 'decimal:2',
         'pending_until' => 'datetime',
+        'is_blocked' => 'boolean',
     ];
 
     /**
@@ -191,6 +193,18 @@ class Reservation extends Model
         if (!$this->check_in_date || !$this->check_out_date) {
             return 0;
         }
+        // Si la reserva está bloqueada, no contar noches
+        if ($this->is_blocked) {
+            return 0;
+        }
         return (int) $this->check_in_date->diffInDays($this->check_out_date);
+    }
+
+    /**
+     * Verifica si la reserva está bloqueada
+     */
+    public function isBlocked(): bool
+    {
+        return $this->is_blocked === true;
     }
 }
