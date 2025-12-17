@@ -25,6 +25,7 @@ class DatabaseSeeder extends Seeder
         // Seed demo data for frontend testing
         $this->call([
             DemoDataSeeder::class,
+            CabinPriceByGuestsSeeder::class,
         ]);
     }
 }

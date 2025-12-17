@@ -45,6 +45,37 @@ class PriceGroup extends Model
     }
 
     /**
+     * Precios de cabañas por cantidad de huéspedes asociados a este grupo
+     */
+    public function cabinPricesByGuests(): HasMany
+    {
+        return $this->hasMany(CabinPriceByGuests::class);
+    }
+
+    /**
+     * Alias para cabinPricesByGuests (para los nuevos endpoints)
+     */
+    public function cabinPrices(): HasMany
+    {
+        return $this->cabinPricesByGuests();
+    }
+
+    /**
+     * Accessor para obtener las cabañas únicas de este grupo
+     */
+    public function getCabinsAttribute()
+    {
+        return $this->cabinPrices()
+            ->with('cabin:id,name,capacity')
+            ->get()
+            ->groupBy('cabin_id')
+            ->map(function ($prices) {
+                return $prices->first()->cabin;
+            })
+            ->values();
+    }
+
+    /**
      * Hook de inicialización del modelo
      */
     protected static function booted(): void
@@ -52,6 +83,7 @@ class PriceGroup extends Model
         // Eliminar en cascada los rangos de precio cuando se elimina el grupo
         static::deleting(function ($priceGroup) {
             $priceGroup->priceRanges()->delete();
+            $priceGroup->cabinPricesByGuests()->delete();
         });
     }
 

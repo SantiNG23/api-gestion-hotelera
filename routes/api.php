@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AvailabilityController;
 use App\Http\Controllers\CabinController;
+use App\Http\Controllers\CabinPriceByGuestsController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DailySummaryController;
 use App\Http\Controllers\FeatureController;
@@ -58,11 +59,17 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('cabins', CabinController::class);
 
         // Tarifas
+        Route::post('price-groups/complete', [PriceGroupController::class, 'storeComplete'])->name('price-groups.store-complete');
+        Route::put('price-groups/{id}/complete', [PriceGroupController::class, 'updateComplete'])->name('price-groups.update-complete');
+        Route::get('price-groups/{id}/complete', [PriceGroupController::class, 'showComplete'])->name('price-groups.show-complete');
         Route::apiResource('price-groups', PriceGroupController::class);
         Route::get('price-ranges/applicable-rates', [PriceRangeController::class, 'getApplicableRates'])->name('price-ranges.applicable-rates');
         Route::apiResource('price-ranges', PriceRangeController::class);
+        Route::get('cabin-prices-by-guests/cabin/{cabinId}', [CabinPriceByGuestsController::class, 'byCabin'])->name('cabin-prices-by-guests.by-cabin');
+        Route::apiResource('cabin-prices-by-guests', CabinPriceByGuestsController::class);
 
         // Reservas
+        Route::post('reservations/calculate-price', [ReservationController::class, 'calculatePrice'])->name('reservations.calculate-price');
         Route::post('reservations/quote', [ReservationController::class, 'quote'])->name('reservations.quote');
         Route::apiResource('reservations', ReservationController::class);
         Route::post('reservations/{reservation}/confirm', [ReservationController::class, 'confirm'])->name('reservations.confirm');

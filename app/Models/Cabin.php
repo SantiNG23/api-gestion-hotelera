@@ -47,5 +47,21 @@ class Cabin extends Model
     {
         return $this->hasMany(Reservation::class);
     }
+
+    /**
+     * Precios de la cabaña por cantidad de huéspedes
+     */
+    public function pricesByGuests(): HasMany
+    {
+        return $this->hasMany(CabinPriceByGuests::class);
+    }
+
+    /**
+     * Alias para pricesByGuests (cabinPrices)
+     */
+    public function cabinPrices(): HasMany
+    {
+        return $this->pricesByGuests();
+    }
 }
 
