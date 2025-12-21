@@ -80,10 +80,10 @@ class PriceGroup extends Model
      */
     protected static function booted(): void
     {
-        // Eliminar en cascada los rangos de precio cuando se elimina el grupo
+        // Eliminar en cascada completa (hard delete) los rangos de precio y precios de cabaña
         static::deleting(function ($priceGroup) {
-            $priceGroup->priceRanges()->delete();
-            $priceGroup->cabinPricesByGuests()->delete();
+            $priceGroup->priceRanges()->forceDelete();
+            $priceGroup->cabinPricesByGuests()->forceDelete();
         });
     }
 

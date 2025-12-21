@@ -89,6 +89,7 @@ class PriceGroupController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:price_groups,name,NULL,id,tenant_id,' . auth()->user()->tenant_id,
+            'priority' => 'nullable|integer|min:0',
             'is_default' => 'boolean',
             'cabins' => 'required|array|min:1',
             'cabins.*.cabin_id' => 'required|integer|exists:cabins,id',
@@ -114,6 +115,7 @@ class PriceGroupController extends Controller
             $priceGroup = \App\Models\PriceGroup::create([
                 'name' => $validated['name'],
                 'price_per_night' => 0, // Obsoleto pero obligatorio por el schema
+                'priority' => $validated['priority'] ?? 0,
                 'is_default' => $validated['is_default'] ?? false,
                 'tenant_id' => auth()->user()->tenant_id,
             ]);
@@ -181,11 +183,20 @@ class PriceGroupController extends Controller
      */
     public function updateComplete(Request $request, int $id): JsonResponse
     {
+        // Validar que el grupo existe antes de procesar
         $priceGroup = \App\Models\PriceGroup::where('tenant_id', auth()->user()->tenant_id)
-            ->findOrFail($id);
+            ->find($id);
+        
+        if (!$priceGroup) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Grupo de precio no encontrado',
+            ], 404);
+        }
 
         $validated = $request->validate([
             'name' => 'string|max:255|unique:price_groups,name,' . $id . ',id,tenant_id,' . auth()->user()->tenant_id,
+            'priority' => 'nullable|integer|min:0',
             'is_default' => 'boolean',
             'cabins' => 'array|min:1',
             'cabins.*.cabin_id' => 'required_with:cabins|integer|exists:cabins,id',
@@ -201,30 +212,52 @@ class PriceGroupController extends Controller
 
         try {
             // 1. Actualizar datos básicos del grupo
-            if (isset($validated['name']) || isset($validated['is_default'])) {
-                $priceGroup->update([
-                    'name' => $validated['name'] ?? $priceGroup->name,
-                    'is_default' => $validated['is_default'] ?? $priceGroup->is_default,
-                ]);
+            if (isset($validated['name']) || isset($validated['is_default']) || isset($validated['priority'])) {
+                $updateData = [];
+                
+                if (isset($validated['name'])) {
+                    $updateData['name'] = $validated['name'];
+                }
+                
+                if (isset($validated['is_default'])) {
+                    $updateData['is_default'] = $validated['is_default'];
+                }
+                
+                if (isset($validated['priority'])) {
+                    $updateData['priority'] = (int) $validated['priority'];
+                }
+                
+                if (!empty($updateData)) {
+                    $priceGroup->update($updateData);
+                }
             }
 
             // 2. Reemplazar precios de cabañas (si se envió)
-            if (isset($validated['cabins'])) {
+            if (isset($validated['cabins']) && is_array($validated['cabins']) && count($validated['cabins']) > 0) {
+                // Validar cabañas y precios
                 $this->validateCabinsAndPrices($validated['cabins']);
                 
                 // Eliminar precios existentes
                 \App\Models\CabinPriceByGuests::where('price_group_id', $priceGroup->id)
                     ->where('tenant_id', auth()->user()->tenant_id)
-                    ->delete();
+                    ->forceDelete();
                 
                 // Crear nuevos precios
                 foreach ($validated['cabins'] as $cabinData) {
+                    if (!isset($cabinData['cabin_id']) || !isset($cabinData['prices'])) {
+                        throw new \Exception('Estructura de cabañas inválida');
+                    }
+                    
                     foreach ($cabinData['prices'] as $priceData) {
+                        if (!isset($priceData['num_guests']) || !isset($priceData['price_per_night'])) {
+                            throw new \Exception('Estructura de precios inválida');
+                        }
+                        
                         \App\Models\CabinPriceByGuests::create([
-                            'cabin_id' => $cabinData['cabin_id'],
+                            'cabin_id' => (int) $cabinData['cabin_id'],
                             'price_group_id' => $priceGroup->id,
-                            'num_guests' => $priceData['num_guests'],
-                            'price_per_night' => $priceData['price_per_night'],
+                            'num_guests' => (int) $priceData['num_guests'],
+                            'price_per_night' => (float) $priceData['price_per_night'],
                             'tenant_id' => auth()->user()->tenant_id,
                         ]);
                     }
@@ -232,16 +265,20 @@ class PriceGroupController extends Controller
             }
 
             // 3. Reemplazar rangos de fecha (si se envió)
-            if (isset($validated['date_ranges'])) {
+            if (isset($validated['date_ranges']) && is_array($validated['date_ranges']) && count($validated['date_ranges']) > 0) {
                 $this->validateDateRanges($validated['date_ranges']);
                 
                 // Eliminar rangos existentes
                 \App\Models\PriceRange::where('price_group_id', $priceGroup->id)
                     ->where('tenant_id', auth()->user()->tenant_id)
-                    ->delete();
+                    ->forceDelete();
                 
                 // Crear nuevos rangos
                 foreach ($validated['date_ranges'] as $rangeData) {
+                    if (!isset($rangeData['start_date']) || !isset($rangeData['end_date'])) {
+                        throw new \Exception('Estructura de rangos de fecha inválida');
+                    }
+                    
                     \App\Models\PriceRange::create([
                         'price_group_id' => $priceGroup->id,
                         'start_date' => $rangeData['start_date'],
@@ -253,7 +290,8 @@ class PriceGroupController extends Controller
 
             \DB::commit();
 
-            // Cargar relaciones
+            // Cargar relaciones para la respuesta
+            $priceGroup->refresh();
             $priceGroup->load([
                 'priceRanges',
                 'cabinPrices.cabin:id,name,capacity'
@@ -264,6 +302,9 @@ class PriceGroupController extends Controller
                 'Grupo de precios actualizado exitosamente'
             );
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            \DB::rollBack();
+            throw $e;
         } catch (\Exception $e) {
             \DB::rollBack();
             
@@ -280,40 +321,69 @@ class PriceGroupController extends Controller
      */
     public function showComplete(int $id): JsonResponse
     {
-        $priceGroup = \App\Models\PriceGroup::where('tenant_id', auth()->user()->tenant_id)
-            ->with([
-                'priceRanges',
-                'cabinPrices.cabin:id,name,description,capacity,is_active'
-            ])
-            ->findOrFail($id);
-
-        // Agrupar precios por cabaña
-        $cabinsWithPrices = $priceGroup->cabinPrices->groupBy('cabin_id')->map(function ($prices, $cabinId) {
-            $cabin = $prices->first()->cabin;
+        try {
+            $priceGroup = \App\Models\PriceGroup::where('tenant_id', auth()->user()->tenant_id)
+                ->with([
+                    'priceRanges',
+                    'cabinPrices.cabin:id,name,description,capacity,is_active'
+                ])
+                ->find($id);
             
-            return [
-                'id' => $cabin->id,
-                'name' => $cabin->name,
-                'description' => $cabin->description,
-                'capacity' => $cabin->capacity,
-                'is_active' => $cabin->is_active,
-                'prices_in_group' => $prices->map(function ($price) {
+            // Validar que el grupo existe
+            if (!$priceGroup) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Grupo de precio no encontrado',
+                ], 404);
+            }
+
+            // Agrupar precios por cabaña, filtrando cabañas eliminadas
+            $cabinsWithPrices = $priceGroup->cabinPrices
+                ->groupBy('cabin_id')
+                ->filter(function ($prices) {
+                    // Filtrar solo los grupos donde la cabaña existe
+                    return $prices->first()?->cabin !== null;
+                })
+                ->map(function ($prices, $cabinId) {
+                    $cabin = $prices->first()?->cabin;
+                    
+                    // Protección adicional en caso de que cabin sea null
+                    if (!$cabin) {
+                        return null;
+                    }
+                    
                     return [
-                        'id' => $price->id,
-                        'num_guests' => $price->num_guests,
-                        'price_per_night' => $price->price_per_night,
+                        'id' => $cabin->id,
+                        'name' => $cabin->name,
+                        'description' => $cabin->description,
+                        'capacity' => $cabin->capacity,
+                        'is_active' => $cabin->is_active,
+                        'prices_in_group' => $prices->map(function ($price) {
+                            return [
+                                'id' => $price->id,
+                                'num_guests' => $price->num_guests,
+                                'price_per_night' => $price->price_per_night,
+                            ];
+                        })->sortBy('num_guests')->values()
                     ];
-                })->sortBy('num_guests')->values()
-            ];
-        })->values();
+                })
+                ->filter() // Filtrar valores nulos
+                ->values();
 
-        // Preparar respuesta
-        $response = $priceGroup->toArray();
-        $response['cabins'] = $cabinsWithPrices;
-        $response['cabins_count'] = $cabinsWithPrices->count();
-        $response['prices_count'] = $priceGroup->cabinPrices->count();
+            // Preparar respuesta
+            $response = $priceGroup->toArray();
+            $response['cabins'] = $cabinsWithPrices;
+            $response['cabins_count'] = $cabinsWithPrices->count();
+            $response['prices_count'] = $priceGroup->cabinPrices->count();
 
-        return $this->successResponse($response);
+            return $this->successResponse($response);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener el grupo de precios',
+                'errors' => ['server' => [$e->getMessage()]]
+            ], 500);
+        }
     }
 
     /**
