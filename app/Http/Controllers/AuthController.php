@@ -10,72 +10,47 @@ use App\Http\Resources\AuthResource;
 use App\Models\User;
 use App\Services\AuthService;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 
 class AuthController extends Controller
 {
-    private AuthService $authService;
-
-    public function __construct(AuthService $authService)
-    {
-        $this->authService = $authService;
-    }
+    public function __construct(
+        private readonly AuthService $authService
+    ) {}
 
     /**
      * Autenticación de usuario (login o registro)
      */
-    public function store(AuthRequest $request)
+    public function store(AuthRequest $request): JsonResponse
     {
-        try {
-            $user = User::where('email', $request->email)->first();
+        $user = $this->authService->authenticate($request->validated());
+        $isNew = $user->wasRecentlyCreated;
 
-            // Si el usuario no existe, lo registramos
-            if (! $user) {
-                $user = $this->authService->createUser($request->validated());
-
-                // Disparamos el evento de registro
-                event(new UserRegistered($user));
-
-                $user->token = $this->authService->createApiToken($user, 'auth-token');
-
-                return $this->successResponse(new AuthResource($user), 'Usuario registrado exitosamente', 201);
-            }
-
-            // Si el usuario existe, verificamos la contraseña
-            if (! $this->authService->validateCredentials($request->email, $request->password)) {
-                return $this->errorResponse('Las credenciales proporcionadas son incorrectas.', 422, ['email' => ['Las credenciales proporcionadas son incorrectas.']]);
-            }
-
-            $user->token = $this->authService->createApiToken($user, 'auth-token');
-
-            return $this->successResponse(new AuthResource($user), 'Usuario autenticado exitosamente');
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse(
+            $this->transformResource($user),
+            $isNew ? 'Usuario registrado exitosamente' : 'Usuario autenticado exitosamente',
+            $isNew ? 201 : 200
+        );
     }
 
     /**
      * Logout del usuario (revocar token)
      */
-    public function destroy(Request $request)
+    public function destroy(Request $request): JsonResponse
     {
-        try {
-            $this->authService->revokeAllTokens($request->user());
+        $this->authService->revokeAllTokens($request->user());
 
-            return $this->successResponse(null, 'Sesión cerrada exitosamente');
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse(null, 'Sesión cerrada exitosamente');
     }
 
     /**
      * Obtener el usuario autenticado
      */
-    public function show(Request $request)
+    public function show(Request $request): JsonResponse
     {
-        try {
-            return $this->successResponse(new AuthResource($request->user()), 'Usuario obtenido exitosamente');
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse(
+            $this->transformResource($request->user()),
+            'Usuario obtenido exitosamente'
+        );
     }
 }

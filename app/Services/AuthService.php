@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use App\Events\UserRegistered;
 
 class AuthService
 {
@@ -33,6 +34,27 @@ class AuthService
             'email' => $userData['email'],
             'password' => Hash::make($userData['password']),
         ]);
+    }
+
+    /**
+     * Autentica a un usuario (login o registro)
+     */
+    public function authenticate(array $data): User
+    {
+        $user = User::where('email', $data['email'])->first();
+
+        if (!$user) {
+            $user = $this->createUser($data);
+            UserRegistered::dispatch($user);
+        } elseif (!$this->validateCredentials($data['email'], $data['password'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'email' => ['Las credenciales proporcionadas son incorrectas.']
+            ]);
+        }
+
+        $user->token = $this->createApiToken($user, 'auth-token');
+
+        return $user;
     }
 
     /**

@@ -6,52 +6,47 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\UserRequest;
 use App\Http\Resources\AuthResource;
+use App\Services\UserService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
+    public function __construct(
+        private readonly UserService $userService
+    ) {}
+
     /**
      * Obtener el perfil del usuario autenticado
      */
-    public function profile(Request $request)
+    public function profile(Request $request): JsonResponse
     {
-        try {
-            return $this->successResponse(new AuthResource($request->user()), 'Perfil obtenido exitosamente');
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse(
+            $this->transformResource($request->user()),
+            'Perfil obtenido exitosamente'
+        );
     }
 
     /**
      * Actualizar el perfil del usuario
      */
-    public function updateProfile(UserRequest $request)
+    public function updateProfile(UserRequest $request): JsonResponse
     {
-        try {
-            $user = $request->user();
-            $user->update($request->validated());
+        $user = $this->userService->updateProfile($request->user(), $request->validated());
 
-            return $this->successResponse(new AuthResource($user), 'Perfil actualizado exitosamente');
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse(
+            $this->transformResource($user),
+            'Perfil actualizado exitosamente'
+        );
     }
 
     /**
      * Actualizar la contraseña del usuario
      */
-    public function updatePassword(UserRequest $request)
+    public function updatePassword(UserRequest $request): JsonResponse
     {
-        try {
-            $user = $request->user();
-            $user->update([
-                'password' => Hash::make($request->validated('password')),
-            ]);
+        $this->userService->updatePassword($request->user(), $request->validated('password'));
 
-            return $this->successResponse(null, 'Contraseña actualizada exitosamente');
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse(null, 'Contraseña actualizada exitosamente');
     }
 }
