@@ -18,14 +18,18 @@ class ApiCollection extends ResourceCollection
         return [
             'data' => $this->collection,
             'meta' => [
-                'pagination' => [
-                    'total' => $this->resource->total(),
-                    'count' => $this->resource->count(),
-                    'per_page' => $this->resource->perPage(),
-                    'current_page' => $this->resource->currentPage(),
-                    'total_pages' => $this->resource->lastPage(),
-                    'has_more_pages' => $this->resource->hasMorePages(),
-                ],
+                'current_page' => $this->resource->currentPage(),
+                'last_page' => $this->resource->lastPage(),
+                'per_page' => $this->resource->perPage(),
+                'total' => $this->resource->total(),
+                'from' => $this->resource->firstItem(),
+                'to' => $this->resource->lastItem(),
+            ],
+            'links' => [
+                'first' => $this->resource->url(1),
+                'last' => $this->resource->url($this->resource->lastPage()),
+                'prev' => $this->resource->previousPageUrl(),
+                'next' => $this->resource->nextPageUrl(),
             ],
         ];
     }

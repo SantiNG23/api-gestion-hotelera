@@ -42,16 +42,13 @@ abstract class ApiRequest extends FormRequest
 
         foreach ($input as $key => $value) {
             if (is_string($value)) {
-                // Elimina espacios en blanco al inicio y final
+                // 1. Elimina espacios en blanco al inicio y final
                 $value = trim($value);
 
-                // Convierte caracteres especiales a entidades HTML
-                $value = htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
-
-                // Elimina caracteres de control
+                // 2. Elimina caracteres de control (evita errores en logs y exportaciones)
                 $value = preg_replace('/[\x00-\x1F\x7F]/u', '', $value);
 
-                // Normaliza espacios múltiples a uno solo
+                // 3. Normaliza espacios múltiples a uno solo para limpieza visual
                 $value = preg_replace('/\s+/', ' ', $value);
 
                 $input[$key] = $value;

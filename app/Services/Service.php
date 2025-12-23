@@ -193,38 +193,54 @@ abstract class Service
             unset($filters['search']);
         }
 
+        // Obtener las columnas una sola vez para mejorar la performance
+        $tableColumns = Schema::getColumnListing($this->model->getTable());
+
         foreach ($filters as $field => $value) {
             // Ignorar valores vacíos o nulos
             if ($value === '' || $value === null) {
                 continue;
             }
 
-            // Si 'global' se pasó como un nombre de campo, ignorarlo para evitar errores
+            // Si 'global' se pasó como un nombre de campo, ignorarlo
             if ($field === 'global') {
                 continue;
             }
 
-            $camelField = Str::camel($field);
-            $method = 'filterBy' . ucfirst($camelField);
-
-            if (method_exists($this, $method)) {
-                // Castear a int si el valor es un string numérico
-                if (is_string($value) && is_numeric($value)) {
-                    $value = (int) $value;
+            // 1. Normalización de tipo (Cast inteligente para números y booleanos)
+            if (is_string($value)) {
+                if (is_numeric($value)) {
+                    $value = str_contains($value, '.') ? (float) $value : (int) $value;
+                } elseif ($value === 'true') {
+                    $value = true;
+                } elseif ($value === 'false') {
+                    $value = false;
                 }
+            }
+
+            // Nombre del método basado en el campo (ej: filterByStatus)
+            $method = 'filterBy' . Str::studly($field);
+
+            // 2. Si el servicio hijo define el método, tiene prioridad
+            if (method_exists($this, $method)) {
                 $this->$method($query, $value);
             } else {
-                // Verificar que el campo existe en la tabla antes de usarlo
-                $columns = Schema::getColumnListing($this->model->getTable());
-                if (! in_array($field, $columns)) {
-                    continue; // Ignorar campos que no existen en la tabla
+                // 3. Fallback automático si el campo existe en la tabla
+                if (! in_array($field, $tableColumns)) {
+                    continue;
                 }
 
-                if (is_string($value)) {
-                    $value = strtolower($value);
-                    $query->where($field, 'like', "%{$value}%");
-                } elseif (is_bool($value)) {
+                // Soporte para múltiples valores (?status[]=confirmed&status[]=pending)
+                if (is_array($value)) {
+                    $query->whereIn($field, $value);
+                }
+                // Números y Booleanos -> Comparación exacta (=)
+                elseif (is_numeric($value) || is_bool($value)) {
                     $query->where($field, $value);
+                }
+                // Strings -> Búsqueda parcial (LIKE)
+                elseif (is_string($value)) {
+                    $query->where($field, 'like', '%' . strtolower($value) . '%');
                 }
             }
         }

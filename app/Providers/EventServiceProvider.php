@@ -11,6 +11,8 @@ use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Listeners\SendEmailVerificationNotification;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
 use Illuminate\Support\Facades\Event;
+use App\Events\ReservationCreated;
+use App\Listeners\SendReservationConfirmationEmail;
 
 class EventServiceProvider extends ServiceProvider
 {
@@ -26,6 +28,9 @@ class EventServiceProvider extends ServiceProvider
         UserRegistered::class => [
             SendWelcomeEmail::class,
             CreateInitialUserSettings::class,
+        ],
+        ReservationCreated::class => [
+            SendReservationConfirmationEmail::class,
         ],
     ];
 
