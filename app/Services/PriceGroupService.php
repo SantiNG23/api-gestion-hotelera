@@ -6,8 +6,10 @@ namespace App\Services;
 
 use App\Models\PriceGroup;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class PriceGroupService extends Service
 {
@@ -48,16 +50,17 @@ class PriceGroupService extends Service
      */
     public function createPriceGroup(array $data): PriceGroup
     {
-        // Si se marca como default, desactivar otros defaults del mismo tenant
-        if (!empty($data['is_default'])) {
-            $tenantId = $data['tenant_id'] ?? Auth::user()->tenant_id;
-            PriceGroup::where('tenant_id', $tenantId)
-                ->where('is_default', true)
-                ->where('deleted_at', null)
-                ->update(['is_default' => false]);
-        }
+        return DB::transaction(function () use ($data) {
+            // Si se marca como default, desactivar otros defaults del mismo tenant
+            if (!empty($data['is_default'])) {
+                $tenantId = $data['tenant_id'] ?? Auth::user()->tenant_id;
+                $this->model->where('tenant_id', $tenantId)
+                    ->where('is_default', true)
+                    ->update(['is_default' => false]);
+            }
 
-        return $this->create($data);
+            return $this->create($data);
+        });
     }
 
     /**
@@ -65,17 +68,18 @@ class PriceGroupService extends Service
      */
     public function updatePriceGroup(int $id, array $data): PriceGroup
     {
-        // Si se marca como default, desactivar otros defaults del mismo tenant
-        if (!empty($data['is_default'])) {
-            $priceGroup = $this->getById($id);
-            PriceGroup::where('tenant_id', $priceGroup->tenant_id)
-                ->where('id', '!=', $id)
-                ->where('is_default', true)
-                ->where('deleted_at', null)
-                ->update(['is_default' => false]);
-        }
+        return DB::transaction(function () use ($id, $data) {
+            // Si se marca como default, desactivar otros defaults del mismo tenant
+            if (!empty($data['is_default'])) {
+                $priceGroup = $this->getById($id);
+                $this->model->where('tenant_id', $priceGroup->tenant_id)
+                    ->where('id', '!=', $id)
+                    ->where('is_default', true)
+                    ->update(['is_default' => false]);
+            }
 
-        return $this->update($id, $data);
+            return $this->update($id, $data);
+        });
     }
 
     /**
@@ -92,15 +96,5 @@ class PriceGroupService extends Service
     protected function getGlobalSearchColumns(): array
     {
         return ['name'];
-    }
-
-    /**
-     * Filtro por is_default
-     */
-    protected function filterByIsDefault(Builder $query, mixed $value): Builder
-    {
-        $isDefault = filter_var($value, FILTER_VALIDATE_BOOLEAN);
-
-        return $query->where('is_default', $isDefault);
     }
 }

@@ -29,10 +29,14 @@ class PriceGroupController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $params = $this->getQueryParams($request);
-        $priceGroups = $this->priceGroupService->getPriceGroups($params);
+        try {
+            $params = $this->getQueryParams($request);
+            $priceGroups = $this->priceGroupService->getPriceGroups($params);
 
-        return $this->paginatedResponse($priceGroups, PriceGroupResource::class);
+            return $this->paginatedResponse($priceGroups, PriceGroupResource::class);
+        } catch (\Exception $e) {
+            return $this->handleError($e);
+        }
     }
 
     /**
@@ -40,13 +44,17 @@ class PriceGroupController extends Controller
      */
     public function store(PriceGroupRequest $request): JsonResponse
     {
-        $priceGroup = $this->priceGroupService->createPriceGroup($request->validated());
+        try {
+            $priceGroup = $this->priceGroupService->createPriceGroup($request->validated());
 
-        return $this->successResponse(
-            new PriceGroupResource($priceGroup),
-            'Grupo de precio creado exitosamente',
-            201
-        );
+            return $this->successResponse(
+                $this->transformResource($priceGroup),
+                'Grupo de precio creado exitosamente',
+                201
+            );
+        } catch (\Exception $e) {
+            return $this->handleError($e);
+        }
     }
 
     /**
@@ -54,9 +62,13 @@ class PriceGroupController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        $priceGroup = $this->priceGroupService->getPriceGroup($id);
+        try {
+            $priceGroup = $this->priceGroupService->getPriceGroup($id);
 
-        return $this->successResponse(new PriceGroupResource($priceGroup));
+            return $this->successResponse($this->transformResource($priceGroup));
+        } catch (\Exception $e) {
+            return $this->handleError($e);
+        }
     }
 
     /**
@@ -64,12 +76,16 @@ class PriceGroupController extends Controller
      */
     public function update(PriceGroupRequest $request, int $id): JsonResponse
     {
-        $priceGroup = $this->priceGroupService->updatePriceGroup($id, $request->validated());
+        try {
+            $priceGroup = $this->priceGroupService->updatePriceGroup($id, $request->validated());
 
-        return $this->successResponse(
-            new PriceGroupResource($priceGroup),
-            'Grupo de precio actualizado exitosamente'
-        );
+            return $this->successResponse(
+                $this->transformResource($priceGroup),
+                'Grupo de precio actualizado exitosamente'
+            );
+        } catch (\Exception $e) {
+            return $this->handleError($e);
+        }
     }
 
     /**
@@ -77,9 +93,13 @@ class PriceGroupController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
-        $this->priceGroupService->deletePriceGroup($id);
+        try {
+            $this->priceGroupService->deletePriceGroup($id);
 
-        return $this->successResponse(null, 'Grupo de precio eliminado exitosamente');
+            return $this->successResponse(null, 'Grupo de precio eliminado exitosamente');
+        } catch (\Exception $e) {
+            return $this->handleError($e);
+        }
     }
 }
 

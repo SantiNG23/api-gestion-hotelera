@@ -19,8 +19,11 @@ class PriceCalculatorServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new PriceCalculatorService();
         $this->localTenant = Tenant::factory()->create();
+        $user = \App\Models\User::factory()->create(['tenant_id' => $this->localTenant->id]);
+        $this->actingAs($user);
+        
+        $this->service = app(PriceCalculatorService::class);
     }
 
     public function test_calculates_price_with_default_group(): void

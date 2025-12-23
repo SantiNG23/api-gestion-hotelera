@@ -4,10 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Models\PriceGroup;
-use App\Models\PriceRange;
 use Carbon\Carbon;
-use Carbon\CarbonPeriod;
 
 /**
  * Servicio utilitario para calcular precios de reservas
@@ -16,6 +13,11 @@ use Carbon\CarbonPeriod;
  */
 class PriceCalculatorService
 {
+    public function __construct(
+        private readonly PriceRangeService $priceRangeService
+    ) {
+    }
+
     /**
      * Calcula el precio total y el desglose por noche
      *
@@ -37,20 +39,22 @@ class PriceCalculatorService
             ];
         }
 
+        // Obtener todas las tarifas aplicables en un solo paso (Adiós N+1)
+        $rates = $this->priceRangeService->getApplicableRates(
+            $checkIn->format('Y-m-d'),
+            $checkOut->copy()->subDay()->format('Y-m-d')
+        );
+
         $breakdown = [];
         $total = 0;
 
-        // Iterar por cada noche (desde check_in hasta el día antes de check_out)
-        $period = CarbonPeriod::create($checkIn, $checkOut->copy()->subDay());
-
-        foreach ($period as $date) {
-            $pricePerNight = $this->getPriceForDate($date);
+        foreach ($rates as $date => $rate) {
             $breakdown[] = [
-                'date' => $date->format('Y-m-d'),
-                'price' => $pricePerNight,
-                'price_group' => $this->getPriceGroupNameForDate($date),
+                'date' => $date,
+                'price' => $rate['price'],
+                'price_group' => $rate['group_name'],
             ];
-            $total += $pricePerNight;
+            $total += $rate['price'];
         }
 
         $deposit = round($total * 0.5, 2);
@@ -63,64 +67,6 @@ class PriceCalculatorService
             'nights' => $nights,
             'breakdown' => $breakdown,
         ];
-    }
-
-    /**
-     * Obtiene el precio por noche para una fecha específica
-     */
-    public function getPriceForDate(Carbon $date): float
-    {
-        // Buscar rango de precio que cubra esta fecha
-        $priceRange = $this->getPriceRangeForDate($date);
-
-        if ($priceRange) {
-            return (float) $priceRange->priceGroup->price_per_night;
-        }
-
-        // Si no hay rango, usar el grupo por defecto
-        $defaultGroup = $this->getDefaultPriceGroup();
-
-        if ($defaultGroup) {
-            return (float) $defaultGroup->price_per_night;
-        }
-
-        // Sin precio configurado, retornar 0
-        return 0;
-    }
-
-    /**
-     * Obtiene el nombre del grupo de precio para una fecha
-     */
-    public function getPriceGroupNameForDate(Carbon $date): ?string
-    {
-        $priceRange = $this->getPriceRangeForDate($date);
-
-        if ($priceRange) {
-            return $priceRange->priceGroup->name;
-        }
-
-        $defaultGroup = $this->getDefaultPriceGroup();
-
-        return $defaultGroup?->name;
-    }
-
-    /**
-     * Obtiene el rango de precio aplicable para una fecha
-     */
-    private function getPriceRangeForDate(Carbon $date): ?PriceRange
-    {
-        return PriceRange::whereDate('start_date', '<=', $date)
-            ->whereDate('end_date', '>=', $date)
-            ->with('priceGroup')
-            ->first();
-    }
-
-    /**
-     * Obtiene el grupo de precio por defecto
-     */
-    private function getDefaultPriceGroup(): ?PriceGroup
-    {
-        return PriceGroup::where('is_default', true)->first();
     }
 
     /**

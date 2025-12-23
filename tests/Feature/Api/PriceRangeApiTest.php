@@ -174,8 +174,9 @@ class PriceRangeApiTest extends TestCase
         // Verificar que todos los días tienen el precio correcto
         $rates = $response->json('data.rates');
         $this->assertCount(6, $rates); // 6 días (inclusivo)
-        foreach ($rates as $price) {
-            $this->assertEquals(100.00, $price);
+        foreach ($rates as $rate) {
+            $this->assertEquals(100.00, $rate['price']);
+            $this->assertEquals($priceGroup->name, $rate['group_name']);
         }
     }
 
@@ -223,13 +224,13 @@ class PriceRangeApiTest extends TestCase
         // Los primeros 3 días deben ser el precio base
         for ($i = 0; $i < 3; $i++) {
             $date = $startDate->copy()->addDays($i)->format('Y-m-d');
-            $this->assertEquals(100.00, $rates[$date]);
+            $this->assertEquals(100.00, $rates[$date]['price']);
         }
 
         // Los últimos 3 días deben ser el precio premium
         for ($i = 3; $i < 6; $i++) {
             $date = $startDate->copy()->addDays($i)->format('Y-m-d');
-            $this->assertEquals(200.00, $rates[$date]);
+            $this->assertEquals(200.00, $rates[$date]['price']);
         }
     }
 
@@ -276,21 +277,28 @@ class PriceRangeApiTest extends TestCase
         $rates = $response->json('data.rates');
 
         // El precio ganador debe ser del rango más nuevo (priceGroup2)
-        foreach ($rates as $price) {
-            $this->assertEquals(150.00, $price);
+        foreach ($rates as $rate) {
+            $this->assertEquals(150.00, $rate['price']);
+            $this->assertEquals($priceGroup2->name, $rate['group_name']);
         }
     }
 
-    public function test_applicable_rates_returns_empty_for_no_matches(): void
+    public function test_applicable_rates_returns_fallback_for_no_matches(): void
     {
         $startDate = Carbon::tomorrow();
-        $endDate = $startDate->copy()->addDays(5);
+        $endDate = $startDate->copy()->addDays(2);
 
         $response = $this->withHeaders($this->authHeaders())
             ->getJson('/api/v1/price-ranges/applicable-rates?start_date=' . $startDate->format('Y-m-d') . '&end_date=' . $endDate->format('Y-m-d'));
 
-        $response->assertStatus(200)
-            ->assertJsonPath('data.rates', []);
+        $response->assertStatus(200);
+        
+        $rates = $response->json('data.rates');
+        $this->assertCount(3, $rates);
+        foreach ($rates as $rate) {
+            $this->assertEquals(0.0, $rate['price']);
+            $this->assertEquals('Sin tarifa configurada', $rate['group_name']);
+        }
     }
 }
 
