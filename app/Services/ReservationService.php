@@ -10,15 +10,18 @@ use App\Models\ReservationPayment;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use App\Events\ReservationCreated;
 
 class ReservationService extends Service
 {
     public function __construct(
         private readonly PriceCalculatorService $priceCalculator,
-        private readonly AvailabilityService $availabilityService
+        private readonly AvailabilityService $availabilityService,
+        private readonly ClientService $clientService
     ) {
         parent::__construct(new Reservation());
     }
@@ -94,7 +97,11 @@ class ReservationService extends Service
                 $this->syncGuests($reservation, $data['guests']);
             }
 
-            return $reservation->load(['client', 'cabin', 'guests']);
+            $reservation = $reservation->load(['client', 'cabin', 'guests']);
+            
+            ReservationCreated::dispatch($reservation);
+
+            return $reservation;
         });
     }
 
@@ -155,18 +162,13 @@ class ReservationService extends Service
         }
 
         return DB::transaction(function () use ($reservation, $data) {
-            // Actualizar campos permitidos
-            $updateData = array_filter([
-                'client_id' => $data['client_id'] ?? null,
-                'cabin_id' => $data['cabin_id'] ?? null,
-                'check_in_date' => $data['check_in_date'] ?? null,
-                'check_out_date' => $data['check_out_date'] ?? null,
-                'total_price' => $data['total_price'] ?? null,
-                'deposit_amount' => $data['deposit_amount'] ?? null,
-                'balance_amount' => $data['balance_amount'] ?? null,
-                'notes' => $data['notes'] ?? null,
-                'is_blocked' => isset($data['is_blocked']) ? $data['is_blocked'] : null,
-            ], fn ($value) => $value !== null);
+            // Campos permitidos para actualización
+            $allowedFields = [
+                'client_id', 'cabin_id', 'check_in_date', 'check_out_date', 
+                'total_price', 'deposit_amount', 'balance_amount', 'notes', 'is_blocked'
+            ];
+            
+            $updateData = Arr::only($data, $allowedFields);
 
             if (!empty($updateData)) {
                 $reservation->update($updateData);
@@ -410,22 +412,6 @@ class ReservationService extends Service
     }
 
     /**
-     * Filtro por cliente
-     */
-    protected function filterByClientId(Builder $query, int $value): Builder
-    {
-        return $query->where('client_id', $value);
-    }
-
-    /**
-     * Filtro por cabaña
-     */
-    protected function filterByCabinId(Builder $query, int $value): Builder
-    {
-        return $query->where('cabin_id', $value);
-    }
-
-    /**
      * Filtro por fecha de check-in (desde X fecha)
      */
     protected function filterByCheckInDate(Builder $query, string $value): Builder
@@ -500,63 +486,26 @@ class ReservationService extends Service
     }
 
     /**
-     * Obtiene o crea un cliente a partir de client_id o datos de cliente
+     * Obtiene o crea un cliente a partir de datos de cliente usando el ClientService
      */
     private function resolveClient(int $tenantId, ?array $clientData): Client
     {
-        if ($clientData === null) {
+        if ($clientData === null || empty($clientData['dni'])) {
             throw ValidationException::withMessages([
-                'client' => ['Los datos del cliente son obligatorios'],
+                'client' => ['Los datos del cliente (incluyendo DNI) son obligatorios'],
             ]);
         }
 
-        $existing = Client::where('tenant_id', $tenantId)
-            ->where('dni', $clientData['dni'])
-            ->first();
+        $client = $this->clientService->searchByDni($clientData['dni']);
 
-        if ($existing !== null) {
-            // Sincronizar datos básicos cuando el cliente ya existe
-            $updatableFields = ['name', 'age', 'city', 'phone', 'email'];
-            $updateData = [];
-
-            foreach ($updatableFields as $field) {
-                if (!array_key_exists($field, $clientData)) {
-                    continue;
-                }
-
-                $value = $clientData[$field];
-
-                // No sobreescribimos con null ni con strings vacíos
-                if ($value === null) {
-                    continue;
-                }
-                if (is_string($value)) {
-                    $value = trim($value);
-                    if ($value === '') {
-                        continue;
-                    }
-                }
-
-                if ($existing->{$field} !== $value) {
-                    $updateData[$field] = $value;
-                }
-            }
-
-            if (!empty($updateData)) {
-                $existing->update($updateData);
-            }
-
-            return $existing;
+        if ($client) {
+            // Actualizar datos si el cliente existe (pero no el DNI)
+            $updatableData = Arr::except($clientData, ['dni', 'tenant_id']);
+            return $this->clientService->updateClient($client->id, $updatableData);
         }
 
-        return Client::create([
-            'tenant_id' => $tenantId,
-            'name' => $clientData['name'],
-            'dni' => $clientData['dni'],
-            'age' => $clientData['age'] ?? null,
-            'city' => $clientData['city'] ?? null,
-            'phone' => $clientData['phone'] ?? null,
-            'email' => $clientData['email'] ?? null,
-        ]);
+        // Crear nuevo cliente
+        $clientData['tenant_id'] = $tenantId;
+        return $this->clientService->createClient($clientData);
     }
 }

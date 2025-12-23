@@ -21,24 +21,28 @@ class DailySummaryController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $request->validate([
-            'date' => ['nullable', 'date'],
-        ]);
+        try {
+            $request->validate([
+                'date' => ['nullable', 'date'],
+            ]);
 
-        $date = $request->date ? Carbon::parse($request->date) : Carbon::today();
+            $date = $request->date ? Carbon::parse($request->date) : Carbon::today();
 
-        $summary = $this->dailySummaryService->getDailySummary($date);
-        $occupancyStats = $this->dailySummaryService->getOccupancyStats($date);
+            $summary = $this->dailySummaryService->getDailySummary($date);
+            $occupancyStats = $this->dailySummaryService->getOccupancyStats($date);
 
-        return $this->successResponse([
-            'date' => $summary['date'],
-            'has_events' => $summary['has_events'],
-            'check_ins' => ReservationResource::collection($summary['check_ins']),
-            'check_outs' => ReservationResource::collection($summary['check_outs']),
-            'expiring_pending' => ReservationResource::collection($summary['expiring_pending']),
-            'summary' => $summary['summary'],
-            'occupancy' => $occupancyStats,
-        ]);
+            return $this->successResponse([
+                'date' => $summary['date'],
+                'has_events' => $summary['has_events'],
+                'check_ins' => ReservationResource::collection($summary['check_ins']),
+                'check_outs' => ReservationResource::collection($summary['check_outs']),
+                'expiring_pending' => ReservationResource::collection($summary['expiring_pending']),
+                'summary' => $summary['summary'],
+                'occupancy' => $occupancyStats,
+            ]);
+        } catch (\Exception $e) {
+            return $this->handleError($e);
+        }
     }
 }
 

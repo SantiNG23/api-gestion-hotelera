@@ -45,7 +45,7 @@ class ReservationController extends Controller
         $reservation = $this->reservationService->createReservation($request->validated());
 
         return $this->successResponse(
-            new ReservationResource($reservation),
+            $this->transformResource($reservation),
             'Reserva creada exitosamente',
             201
         );
@@ -58,7 +58,7 @@ class ReservationController extends Controller
     {
         $reservation = $this->reservationService->getReservation($id);
 
-        return $this->successResponse(new ReservationResource($reservation));
+        return $this->successResponse($this->transformResource($reservation));
     }
 
     /**
@@ -69,7 +69,7 @@ class ReservationController extends Controller
         $reservation = $this->reservationService->updateReservation($id, $request->validated());
 
         return $this->successResponse(
-            new ReservationResource($reservation),
+            $this->transformResource($reservation),
             'Reserva actualizada exitosamente'
         );
     }
@@ -106,7 +106,7 @@ class ReservationController extends Controller
         $reservation = $this->reservationService->confirm($id, $request->validated());
 
         return $this->successResponse(
-            new ReservationResource($reservation),
+            $this->transformResource($reservation),
             'Reserva confirmada exitosamente'
         );
     }
@@ -119,7 +119,7 @@ class ReservationController extends Controller
         $reservation = $this->reservationService->checkIn($id, $request->validated());
 
         return $this->successResponse(
-            new ReservationResource($reservation),
+            $this->transformResource($reservation),
             'Check-in realizado exitosamente'
         );
     }
@@ -132,7 +132,7 @@ class ReservationController extends Controller
         $reservation = $this->reservationService->checkOut($id);
 
         return $this->successResponse(
-            new ReservationResource($reservation),
+            $this->transformResource($reservation),
             'Check-out realizado exitosamente'
         );
     }
@@ -145,7 +145,7 @@ class ReservationController extends Controller
         $reservation = $this->reservationService->payBalance($id, $request->validated());
 
         return $this->successResponse(
-            new ReservationResource($reservation),
+            $this->transformResource($reservation),
             'Saldo pagado exitosamente'
         );
     }
@@ -158,7 +158,7 @@ class ReservationController extends Controller
         $reservation = $this->reservationService->cancel($id);
 
         return $this->successResponse(
-            new ReservationResource($reservation),
+            $this->transformResource($reservation),
             'Reserva cancelada exitosamente'
         );
     }
