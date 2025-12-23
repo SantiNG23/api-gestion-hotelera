@@ -243,7 +243,7 @@ class PriceGroupApiTest extends TestCase
 
         $response->assertStatus(404)
             ->assertJsonPath('success', false)
-            ->assertJsonPath('message', 'Grupo de precio no encontrado');
+            ->assertJsonPath('message', 'Recurso no encontrado');
     }
 
     public function test_can_update_price_group_complete(): void
@@ -340,7 +340,7 @@ class PriceGroupApiTest extends TestCase
 
         $response->assertStatus(404)
             ->assertJsonPath('success', false)
-            ->assertJsonPath('message', 'Grupo de precio no encontrado');
+            ->assertJsonPath('message', 'Recurso no encontrado');
     }
 
     public function test_can_store_price_group_complete(): void
