@@ -27,27 +27,12 @@ class AvailabilityService
     public function isAvailable(int $cabinId, Carbon $checkIn, Carbon $checkOut, ?int $excludeReservationId = null): bool
     {
         $query = Reservation::where('cabin_id', $cabinId)
-            ->whereIn('status', Reservation::BLOCKING_STATUSES)
+            ->blocking()
             ->where(function ($q) use ($checkIn, $checkOut) {
                 // Detectar solapamiento:
-                // Una reserva existente se solapa si:
-                // - Su check_in es antes del nuevo check_out Y
-                // - Su check_out es después del nuevo check_in
                 $q->whereDate('check_in_date', '<', $checkOut)
                     ->whereDate('check_out_date', '>', $checkIn);
             });
-
-        // Excluir reservas pendientes que ya vencieron
-        $query->where(function ($q) {
-            $q->where('status', '!=', Reservation::STATUS_PENDING_CONFIRMATION)
-                ->orWhere(function ($q2) {
-                    $q2->where('status', Reservation::STATUS_PENDING_CONFIRMATION)
-                        ->where(function ($q3) {
-                            $q3->whereNull('pending_until')
-                                ->orWhere('pending_until', '>', now());
-                        });
-                });
-        });
 
         if ($excludeReservationId) {
             $query->where('id', '!=', $excludeReservationId);
@@ -66,20 +51,10 @@ class AvailabilityService
     public function getAvailableCabins(Carbon $checkIn, Carbon $checkOut): Collection
     {
         // Obtener IDs de cabañas con reservas que bloquean
-        $blockedCabinIds = Reservation::whereIn('status', Reservation::BLOCKING_STATUSES)
+        $blockedCabinIds = Reservation::blocking()
             ->where(function ($q) use ($checkIn, $checkOut) {
                 $q->whereDate('check_in_date', '<', $checkOut)
                     ->whereDate('check_out_date', '>', $checkIn);
-            })
-            ->where(function ($q) {
-                $q->where('status', '!=', Reservation::STATUS_PENDING_CONFIRMATION)
-                    ->orWhere(function ($q2) {
-                        $q2->where('status', Reservation::STATUS_PENDING_CONFIRMATION)
-                            ->where(function ($q3) {
-                                $q3->whereNull('pending_until')
-                                    ->orWhere('pending_until', '>', now());
-                            });
-                    });
             })
             ->pluck('cabin_id')
             ->unique();
@@ -101,20 +76,10 @@ class AvailabilityService
     public function getBlockingReservations(int $cabinId, Carbon $from, Carbon $to): Collection
     {
         return Reservation::where('cabin_id', $cabinId)
-            ->whereIn('status', Reservation::BLOCKING_STATUSES)
+            ->blocking()
             ->where(function ($q) use ($from, $to) {
                 $q->whereDate('check_in_date', '<', $to)
                     ->whereDate('check_out_date', '>', $from);
-            })
-            ->where(function ($q) {
-                $q->where('status', '!=', Reservation::STATUS_PENDING_CONFIRMATION)
-                    ->orWhere(function ($q2) {
-                        $q2->where('status', Reservation::STATUS_PENDING_CONFIRMATION)
-                            ->where(function ($q3) {
-                                $q3->whereNull('pending_until')
-                                    ->orWhere('pending_until', '>', now());
-                            });
-                    });
             })
             ->with(['client', 'cabin'])
             ->orderBy('check_in_date')
@@ -166,20 +131,10 @@ class AvailabilityService
         $calendarCabins = $cabins->map(function (Cabin $cabin) use ($from, $to) {
             // Obtener reservas que se solapan con el rango de fechas
             $reservations = Reservation::where('cabin_id', $cabin->id)
-                ->whereIn('status', Reservation::BLOCKING_STATUSES)
+                ->blocking()
                 ->where(function ($q) use ($from, $to) {
                     $q->whereDate('check_in_date', '<', $to)
                         ->whereDate('check_out_date', '>', $from);
-                })
-                ->where(function ($q) {
-                    $q->where('status', '!=', Reservation::STATUS_PENDING_CONFIRMATION)
-                        ->orWhere(function ($q2) {
-                            $q2->where('status', Reservation::STATUS_PENDING_CONFIRMATION)
-                                ->where(function ($q3) {
-                                    $q3->whereNull('pending_until')
-                                        ->orWhere('pending_until', '>', now());
-                                });
-                        });
                 })
                 ->with('client')
                 ->orderBy('check_in_date')
@@ -218,20 +173,10 @@ class AvailabilityService
     {
         // Buscar una reserva que cubra este día
         $reservation = Reservation::where('cabin_id', $cabinId)
-            ->whereIn('status', Reservation::BLOCKING_STATUSES)
+            ->blocking()
             ->where(function ($q) use ($date) {
                 $q->whereDate('check_in_date', '<=', $date)
                     ->whereDate('check_out_date', '>', $date);
-            })
-            ->where(function ($q) {
-                $q->where('status', '!=', Reservation::STATUS_PENDING_CONFIRMATION)
-                    ->orWhere(function ($q2) {
-                        $q2->where('status', Reservation::STATUS_PENDING_CONFIRMATION)
-                            ->where(function ($q3) {
-                                $q3->whereNull('pending_until')
-                                    ->orWhere('pending_until', '>', now());
-                            });
-                    });
             })
             ->first();
 

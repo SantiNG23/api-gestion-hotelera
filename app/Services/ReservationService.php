@@ -93,7 +93,7 @@ class ReservationService extends Service
                 'deposit_amount' => $priceDetails['deposit'],
                 'balance_amount' => $priceDetails['balance'],
                 'status' => Reservation::STATUS_PENDING_CONFIRMATION,
-                'pending_until' => now()->addHours((int) ($data['pending_hours'] ?? 48)),
+                'pending_until' => $isBlocked ? null : now()->addHours((int) ($data['pending_hours'] ?? 48)),
                 'notes' => $data['notes'] ?? null,
                 'is_blocked' => $isBlocked,
             ]);
