@@ -13,6 +13,9 @@ class Client extends Model
     use BelongsToTenant;
     use HasFactory;
 
+    // DNI para reservas de bloqueo
+    public const DNI_BLOCK = '00000000';
+
     protected $table = 'clients';
 
     protected $fillable = [
