@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class ClientRequest extends ApiRequest
 {
@@ -34,9 +35,9 @@ class ClientRequest extends ApiRequest
 
         // Validación única de DNI por tenant
         if ($this->isMethod('POST')) {
-            $rules['dni'][] = "unique:clients,dni,NULL,id,tenant_id,{$tenantId}";
+            $rules['dni'][] = Rule::unique('clients', 'dni')->where('tenant_id', $tenantId);
         } elseif ($isUpdate && $this->has('dni')) {
-            $rules['dni'][] = "unique:clients,dni,{$clientId},id,tenant_id,{$tenantId}";
+            $rules['dni'][] = Rule::unique('clients', 'dni')->ignore($clientId)->where('tenant_id', $tenantId);
         }
 
         return $rules;

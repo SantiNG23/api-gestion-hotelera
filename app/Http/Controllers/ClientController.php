@@ -29,10 +29,14 @@ class ClientController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $params = $this->getQueryParams($request);
-        $clients = $this->clientService->getClients($params);
+        try {
+            $params = $this->getQueryParams($request);
+            $clients = $this->clientService->getClients($params);
 
-        return $this->paginatedResponse($clients, ClientResource::class);
+            return $this->paginatedResponse($clients, ClientResource::class);
+        } catch (\Exception $e) {
+            return $this->handleError($e);
+        }
     }
 
     /**
@@ -40,13 +44,17 @@ class ClientController extends Controller
      */
     public function store(ClientRequest $request): JsonResponse
     {
-        $client = $this->clientService->createClient($request->validated());
+        try {
+            $client = $this->clientService->createClient($request->validated());
 
-        return $this->successResponse(
-            new ClientResource($client),
-            'Cliente creado exitosamente',
-            201
-        );
+            return $this->successResponse(
+                $this->transformResource($client),
+                'Cliente creado exitosamente',
+                201
+            );
+        } catch (\Exception $e) {
+            return $this->handleError($e);
+        }
     }
 
     /**
@@ -54,9 +62,13 @@ class ClientController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        $client = $this->clientService->getClientWithReservations($id);
+        try {
+            $client = $this->clientService->getClientWithReservations($id);
 
-        return $this->successResponse(new ClientResource($client));
+            return $this->successResponse($this->transformResource($client));
+        } catch (\Exception $e) {
+            return $this->handleError($e);
+        }
     }
 
     /**
@@ -64,12 +76,16 @@ class ClientController extends Controller
      */
     public function update(ClientRequest $request, int $id): JsonResponse
     {
-        $client = $this->clientService->updateClient($id, $request->validated());
+        try {
+            $client = $this->clientService->updateClient($id, $request->validated());
 
-        return $this->successResponse(
-            new ClientResource($client),
-            'Cliente actualizado exitosamente'
-        );
+            return $this->successResponse(
+                $this->transformResource($client),
+                'Cliente actualizado exitosamente'
+            );
+        } catch (\Exception $e) {
+            return $this->handleError($e);
+        }
     }
 
     /**
@@ -77,9 +93,13 @@ class ClientController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
-        $this->clientService->deleteClient($id);
+        try {
+            $this->clientService->deleteClient($id);
 
-        return $this->successResponse(null, 'Cliente eliminado exitosamente');
+            return $this->successResponse(null, 'Cliente eliminado exitosamente');
+        } catch (\Exception $e) {
+            return $this->handleError($e);
+        }
     }
 
     /**
@@ -87,13 +107,17 @@ class ClientController extends Controller
      */
     public function searchByDni(string $dni): JsonResponse
     {
-        $client = $this->clientService->searchByDni($dni);
+        try {
+            $client = $this->clientService->searchByDni($dni);
 
-        if (!$client) {
-            return $this->errorResponse('Cliente no encontrado', 404);
+            if (!$client) {
+                return $this->errorResponse('Cliente no encontrado', 404);
+            }
+
+            return $this->successResponse($this->transformResource($client));
+        } catch (\Exception $e) {
+            return $this->handleError($e);
         }
-
-        return $this->successResponse(new ClientResource($client));
     }
 }
 

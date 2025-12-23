@@ -7,7 +7,10 @@ namespace App\Services;
 use App\Models\Cabin;
 use App\Models\Feature;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 
 class CabinService extends Service
 {
@@ -30,7 +33,7 @@ class CabinService extends Service
     /**
      * Obtiene cabañas activas
      */
-    public function getActiveCabins(): \Illuminate\Database\Eloquent\Collection
+    public function getActiveCabins(): Collection
     {
         return $this->model->where('is_active', true)->with('features')->get();
     }
@@ -44,20 +47,23 @@ class CabinService extends Service
     }
 
     /**
-     * Crea una nueva cabaña
+     * Crea una nueva cabaña y sincroniza sus características
      */
     public function createCabin(array $data): Cabin
     {
-        $featureIds = $data['feature_ids'] ?? [];
-        unset($data['feature_ids']);
+        return DB::transaction(function () use ($data) {
+            // Extrae y remueve feature_ids en un solo paso
+            $featureIds = Arr::pull($data, 'feature_ids', []);
+            
+            $cabin = $this->create($data);
 
-        $cabin = $this->create($data);
+            // Sincronizar solo si hay IDs (ahorra una query si está vacío)
+            if (!empty($featureIds)) {
+                $this->syncFeatures($cabin, $featureIds);
+            }
 
-        if (!empty($featureIds)) {
-            $this->syncFeatures($cabin, $featureIds);
-        }
-
-        return $cabin->load('features');
+            return $cabin->load('features');
+        });
     }
 
     /**
@@ -65,16 +71,16 @@ class CabinService extends Service
      */
     public function updateCabin(int $id, array $data): Cabin
     {
-        $featureIds = $data['feature_ids'] ?? null;
-        unset($data['feature_ids']);
+        return DB::transaction(function () use ($id, $data) {
+            $featureIds = Arr::pull($data, 'feature_ids');
+            $cabin = $this->update($id, $data);
 
-        $cabin = $this->update($id, $data);
+            if ($featureIds !== null) {
+                $this->syncFeatures($cabin, $featureIds);
+            }
 
-        if ($featureIds !== null) {
-            $this->syncFeatures($cabin, $featureIds);
-        }
-
-        return $cabin->load('features');
+            return $cabin->load('features');
+        });
     }
 
     /**
@@ -86,34 +92,23 @@ class CabinService extends Service
     }
 
     /**
-     * Sincroniza las características de una cabaña
-     * Valida que las características pertenezcan al mismo tenant
+     * Sincroniza las características de una cabaña asegurando la integridad del tenant
      */
     public function syncFeatures(Cabin $cabin, array $featureIds): void
     {
+        // Si no hay ids, sync([]) hace automáticamente un detach()
+        // y nos ahorramos la query de filtrado.
         if (empty($featureIds)) {
             $cabin->features()->detach();
-
             return;
         }
 
-        // Validar que todas las características pertenezcan al mismo tenant
+        // Filtramos los IDs para que solo queden los que pertenecen al tenant de la cabaña
         $validFeatureIds = Feature::where('tenant_id', $cabin->tenant_id)
             ->whereIn('id', $featureIds)
-            ->pluck('id')
-            ->toArray();
+            ->pluck('id');
 
         $cabin->features()->sync($validFeatureIds);
-    }
-
-    /**
-     * Filtro por estado activo
-     */
-    protected function filterByIsActive(Builder $query, mixed $value): Builder
-    {
-        $isActive = filter_var($value, FILTER_VALIDATE_BOOLEAN);
-
-        return $query->where('is_active', $isActive);
     }
 
     /**

@@ -67,16 +67,6 @@ class FeatureService extends Service
     }
 
     /**
-     * Filtro por estado activo
-     */
-    protected function filterByIsActive(Builder $query, mixed $value): Builder
-    {
-        $isActive = filter_var($value, FILTER_VALIDATE_BOOLEAN);
-
-        return $query->where('is_active', $isActive);
-    }
-
-    /**
      * Columnas para búsqueda global
      */
     protected function getGlobalSearchColumns(): array
