@@ -21,7 +21,7 @@ class PriceGroupService extends Service
      */
     public function getPriceGroups(array $params): LengthAwarePaginator
     {
-        $query = $this->model->query()->with('priceRanges');
+        $query = $this->model->query();
         $query = $this->getFilteredAndSorted($query, $params);
 
         return $this->getAll($params['page'], $params['per_page'], $query);

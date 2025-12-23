@@ -20,7 +20,6 @@ class PriceGroupResource extends ApiResource
             'price_per_night' => (float) $this->price_per_night,
             'priority' => $this->priority,
             'is_default' => $this->is_default,
-            'price_ranges' => $this->whenLoaded('priceRanges', fn () => PriceRangeResource::collection($this->priceRanges)),
         ];
     }
 }
