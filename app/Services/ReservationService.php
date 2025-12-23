@@ -60,10 +60,11 @@ class ReservationService extends Service
             ]);
         }
 
-        // Calcular precios automáticamente
-        $priceDetails = $this->priceCalculator->calculatePrice($checkIn, $checkOut);
+        // Calcular precios automáticamente (num_guests es obligatorio en el request)
+        $numGuests = (int) $data['num_guests'];
+        $priceDetails = $this->priceCalculator->calculatePrice($checkIn, $checkOut, $data['cabin_id'], $numGuests);
 
-        return DB::transaction(function () use ($data, $priceDetails) {
+        return DB::transaction(function () use ($data, $priceDetails, $numGuests) {
             $tenantId = $data['tenant_id'] ?? Auth::user()->tenant_id;
             $client = $this->resolveClient(
                 $tenantId,
@@ -74,6 +75,7 @@ class ReservationService extends Service
                 'tenant_id' => $tenantId,
                 'client_id' => $client->id,
                 'cabin_id' => $data['cabin_id'],
+                'num_guests' => $numGuests,
                 'check_in_date' => $data['check_in_date'],
                 'check_out_date' => $data['check_out_date'],
                 'total_price' => $priceDetails['total'],
@@ -126,7 +128,11 @@ class ReservationService extends Service
                 ]);
             }
 
-            $priceDetails = $this->priceCalculator->calculatePrice($checkIn, $checkOut);
+            $numGuests = (int) ($data['num_guests'] ?? $reservation->num_guests ?? $reservation->guests()->count());
+            // Fallback mínimo de 1 por seguridad, aunque debería estar en DB o request
+            $numGuests = max(1, $numGuests);
+
+            $priceDetails = $this->priceCalculator->calculatePrice($checkIn, $checkOut, (int) $cabinId, $numGuests);
             $data['total_price'] = $priceDetails['total'];
             $data['deposit_amount'] = $priceDetails['deposit'];
             $data['balance_amount'] = $priceDetails['balance'];
@@ -147,6 +153,7 @@ class ReservationService extends Service
             $updateData = array_filter([
                 'client_id' => $data['client_id'] ?? null,
                 'cabin_id' => $data['cabin_id'] ?? null,
+                'num_guests' => $data['num_guests'] ?? null,
                 'check_in_date' => $data['check_in_date'] ?? null,
                 'check_out_date' => $data['check_out_date'] ?? null,
                 'total_price' => $data['total_price'] ?? null,
@@ -353,7 +360,7 @@ class ReservationService extends Service
     /**
      * Genera una cotización
      */
-    public function generateQuote(int $cabinId, string $checkIn, string $checkOut): array
+    public function generateQuote(int $cabinId, string $checkIn, string $checkOut, int $numGuests): array
     {
         $checkInDate = Carbon::parse($checkIn);
         $checkOutDate = Carbon::parse($checkOut);
@@ -361,7 +368,7 @@ class ReservationService extends Service
         // Verificar disponibilidad
         $isAvailable = $this->availabilityService->isAvailable($cabinId, $checkInDate, $checkOutDate);
 
-        $quote = $this->priceCalculator->generateQuote($cabinId, $checkIn, $checkOut);
+        $quote = $this->priceCalculator->generateQuote($cabinId, $checkIn, $checkOut, $numGuests);
         $quote['is_available'] = $isAvailable;
 
         return $quote;

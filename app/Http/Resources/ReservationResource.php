@@ -18,6 +18,7 @@ class ReservationResource extends ApiResource
             'id' => $this->id,
             'client_id' => $this->client_id,
             'cabin_id' => $this->cabin_id,
+            'num_guests' => $this->num_guests,
             'check_in_date' => $this->check_in_date->format('Y-m-d'),
             'check_out_date' => $this->check_out_date->format('Y-m-d'),
             'nights' => $this->nights,

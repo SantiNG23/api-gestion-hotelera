@@ -16,7 +16,7 @@ class CabinPriceByGuestsRequest extends ApiRequest
         return [
             'cabin_id' => ['required', 'integer', 'exists:cabins,id'],
             'price_group_id' => ['required', 'integer', 'exists:price_groups,id'],
-            'num_guests' => ['required', 'integer', 'min:1', 'max:255'],
+            'num_guests' => ['required', 'integer', 'min:2', 'max:255'],
             'price_per_night' => ['required', 'numeric', 'min:0', 'max:999999.99'],
         ];
     }

@@ -33,6 +33,7 @@ class ReservationFactory extends Factory
             'tenant_id' => Tenant::factory(),
             'client_id' => Client::factory(),
             'cabin_id' => Cabin::factory(),
+            'num_guests' => fake()->numberBetween(2, 6),
             'check_in_date' => $checkIn,
             'check_out_date' => $checkOut,
             'total_price' => $totalPrice,

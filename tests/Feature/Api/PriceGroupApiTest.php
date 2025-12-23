@@ -252,8 +252,8 @@ class PriceGroupApiTest extends TestCase
                 [
                     'cabin_id' => $cabin->id,
                     'prices' => [
-                        ['num_guests' => 1, 'price_per_night' => 100.00],
-                        ['num_guests' => 2, 'price_per_night' => 150.00],
+                        ['num_guests' => 2, 'price_per_night' => 100.00],
+                        ['num_guests' => 3, 'price_per_night' => 150.00],
                     ]
                 ]
             ]
@@ -274,7 +274,7 @@ class PriceGroupApiTest extends TestCase
         $this->assertDatabaseHas('cabin_price_by_guests', [
             'cabin_id' => $cabin->id,
             'price_group_id' => $priceGroup->id,
-            'num_guests' => 1,
+            'num_guests' => 2,
             'price_per_night' => 100.00,
         ]);
     }
@@ -294,7 +294,7 @@ class PriceGroupApiTest extends TestCase
                 [
                     'cabin_id' => $cabin->id,
                     'prices' => [
-                        ['num_guests' => 1, 'price_per_night' => 100.00],
+                        ['num_guests' => 2, 'price_per_night' => 100.00],
                     ]
                 ]
             ]
@@ -316,10 +316,21 @@ class PriceGroupApiTest extends TestCase
 
     public function test_update_complete_returns_404_for_nonexistent_group(): void
     {
+        // El test debe verificar que devuelve 404 cuando el grupo no existe
+        // Pero la validación del request ocurre primero, así que necesitamos datos válidos
+        $cabin = Cabin::factory()->create(['tenant_id' => $this->tenant->id]);
+        
         $response = $this->withHeaders($this->authHeaders())
             ->putJson("/api/v1/price-groups/99999/complete", [
                 'name' => 'Test',
-                'cabins' => []
+                'cabins' => [
+                    [
+                        'cabin_id' => $cabin->id,
+                        'prices' => [
+                            ['num_guests' => 2, 'price_per_night' => 100.00],
+                        ]
+                    ]
+                ]
             ]);
 
         $response->assertStatus(404)
@@ -338,8 +349,8 @@ class PriceGroupApiTest extends TestCase
                 [
                     'cabin_id' => $cabin->id,
                     'prices' => [
-                        ['num_guests' => 1, 'price_per_night' => 100.00],
-                        ['num_guests' => 2, 'price_per_night' => 150.00],
+                        ['num_guests' => 2, 'price_per_night' => 100.00],
+                        ['num_guests' => 3, 'price_per_night' => 150.00],
                     ]
                 ]
             ]
@@ -361,7 +372,7 @@ class PriceGroupApiTest extends TestCase
         // Verificar precios
         $this->assertDatabaseHas('cabin_price_by_guests', [
             'cabin_id' => $cabin->id,
-            'num_guests' => 1,
+            'num_guests' => 2,
             'price_per_night' => 100.00,
         ]);
     }

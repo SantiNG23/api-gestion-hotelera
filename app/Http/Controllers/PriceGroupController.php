@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\PriceGroupCompleteRequest;
 use App\Http\Requests\PriceGroupRequest;
 use App\Http\Resources\PriceGroupResource;
+use App\Models\PriceGroup;
+use App\Models\CabinPriceByGuests;
+use App\Models\PriceRange;
 use App\Services\PriceGroupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -85,21 +89,9 @@ class PriceGroupController extends Controller
     /**
      * Crear grupo de precio completo (grupo + cabañas + precios + rangos)
      */
-    public function storeComplete(Request $request): JsonResponse
+    public function storeComplete(PriceGroupCompleteRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:price_groups,name,NULL,id,tenant_id,' . auth()->user()->tenant_id,
-            'priority' => 'nullable|integer|min:0',
-            'is_default' => 'boolean',
-            'cabins' => 'required|array|min:1',
-            'cabins.*.cabin_id' => 'required|integer|exists:cabins,id',
-            'cabins.*.prices' => 'required|array|min:1',
-            'cabins.*.prices.*.num_guests' => 'required|integer|min:1|max:255',
-            'cabins.*.prices.*.price_per_night' => 'required|numeric|min:0|max:999999.99',
-            'date_ranges' => 'array',
-            'date_ranges.*.start_date' => 'required_with:date_ranges|date|date_format:Y-m-d',
-            'date_ranges.*.end_date' => 'required_with:date_ranges|date|date_format:Y-m-d|after:date_ranges.*.start_date',
-        ]);
+        $validated = $request->validated();
 
         // Validaciones personalizadas
         $this->validateCabinsAndPrices($validated['cabins']);
@@ -112,7 +104,7 @@ class PriceGroupController extends Controller
             \DB::beginTransaction();
 
             // 1. Crear el PriceGroup
-            $priceGroup = \App\Models\PriceGroup::create([
+            $priceGroup = PriceGroup::create([
                 'name' => $validated['name'],
                 'price_per_night' => 0, // Obsoleto pero obligatorio por el schema
                 'priority' => $validated['priority'] ?? 0,
@@ -123,7 +115,7 @@ class PriceGroupController extends Controller
             // 2. Crear los precios por cabaña y huéspedes
             foreach ($validated['cabins'] as $cabinData) {
                 foreach ($cabinData['prices'] as $priceData) {
-                    \App\Models\CabinPriceByGuests::create([
+                    CabinPriceByGuests::create([
                         'cabin_id' => $cabinData['cabin_id'],
                         'price_group_id' => $priceGroup->id,
                         'num_guests' => $priceData['num_guests'],
@@ -136,7 +128,7 @@ class PriceGroupController extends Controller
             // 3. Crear los rangos de fecha (si existen)
             if (!empty($validated['date_ranges'])) {
                 foreach ($validated['date_ranges'] as $rangeData) {
-                    \App\Models\PriceRange::create([
+                    PriceRange::create([
                         'price_group_id' => $priceGroup->id,
                         'start_date' => $rangeData['start_date'],
                         'end_date' => $rangeData['end_date'],
@@ -181,10 +173,10 @@ class PriceGroupController extends Controller
     /**
      * Actualizar grupo de precio completo
      */
-    public function updateComplete(Request $request, int $id): JsonResponse
+    public function updateComplete(PriceGroupCompleteRequest $request, int $id): JsonResponse
     {
         // Validar que el grupo existe antes de procesar
-        $priceGroup = \App\Models\PriceGroup::where('tenant_id', auth()->user()->tenant_id)
+        $priceGroup = PriceGroup::where('tenant_id', auth()->user()->tenant_id)
             ->find($id);
         
         if (!$priceGroup) {
@@ -194,19 +186,7 @@ class PriceGroupController extends Controller
             ], 404);
         }
 
-        $validated = $request->validate([
-            'name' => 'string|max:255|unique:price_groups,name,' . $id . ',id,tenant_id,' . auth()->user()->tenant_id,
-            'priority' => 'nullable|integer|min:0',
-            'is_default' => 'boolean',
-            'cabins' => 'array|min:1',
-            'cabins.*.cabin_id' => 'required_with:cabins|integer|exists:cabins,id',
-            'cabins.*.prices' => 'required_with:cabins|array|min:1',
-            'cabins.*.prices.*.num_guests' => 'required_with:cabins|integer|min:1|max:255',
-            'cabins.*.prices.*.price_per_night' => 'required_with:cabins|numeric|min:0|max:999999.99',
-            'date_ranges' => 'array',
-            'date_ranges.*.start_date' => 'required_with:date_ranges|date|date_format:Y-m-d',
-            'date_ranges.*.end_date' => 'required_with:date_ranges|date|date_format:Y-m-d|after:date_ranges.*.start_date',
-        ]);
+        $validated = $request->validated();
 
         \DB::beginTransaction();
 

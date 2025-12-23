@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
+use App\Models\CabinPriceByGuests;
 use App\Models\Cabin;
 use App\Models\Client;
 use App\Models\PriceGroup;
@@ -28,6 +29,31 @@ class ReservationApiTest extends TestCase
             'tenant_id' => $this->tenant->id,
             'price_per_night' => 100,
             'is_default' => true,
+        ]);
+
+        // Crear precios por cantidad de huéspedes para el grupo por defecto
+        CabinPriceByGuests::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'price_group_id' => $this->priceGroup->id,
+            'num_guests' => 2,
+            'price_per_night' => 100,
+        ]);
+
+        CabinPriceByGuests::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'price_group_id' => $this->priceGroup->id,
+            'num_guests' => 3,
+            'price_per_night' => 120,
+        ]);
+
+        CabinPriceByGuests::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'price_group_id' => $this->priceGroup->id,
+            'num_guests' => 4,
+            'price_per_night' => 140,
         ]);
     }
 
@@ -58,6 +84,7 @@ class ReservationApiTest extends TestCase
                 'email' => $this->client->email,
             ],
             'cabin_id' => $this->cabin->id,
+            'num_guests' => 2,
             'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
             'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
             'notes' => 'Reserva de prueba',
@@ -84,6 +111,7 @@ class ReservationApiTest extends TestCase
                 'dni' => $this->client->dni,
             ],
             'cabin_id' => $this->cabin->id,
+            'num_guests' => 2,
             'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
             'check_out_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
             'guests' => [
@@ -117,6 +145,7 @@ class ReservationApiTest extends TestCase
                 'dni' => $this->client->dni,
             ],
             'cabin_id' => $this->cabin->id,
+            'num_guests' => 2,
             'check_in_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
             'check_out_date' => Carbon::tomorrow()->addDays(7)->format('Y-m-d'),
         ];
@@ -133,7 +162,7 @@ class ReservationApiTest extends TestCase
             ->postJson('/api/v1/reservations', []);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['client', 'cabin_id', 'check_in_date', 'check_out_date']);
+            ->assertJsonValidationErrors(['client', 'cabin_id', 'num_guests', 'check_in_date', 'check_out_date']);
     }
 
     public function test_can_show_reservation(): void
@@ -352,6 +381,7 @@ class ReservationApiTest extends TestCase
     {
         $data = [
             'cabin_id' => $this->cabin->id,
+            'num_guests' => 2,
             'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
             'check_out_date' => Carbon::tomorrow()->addDays(4)->format('Y-m-d'),
         ];
@@ -380,6 +410,7 @@ class ReservationApiTest extends TestCase
 
         $data = [
             'cabin_id' => $this->cabin->id,
+            'num_guests' => 2,
             'check_in_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
             'check_out_date' => Carbon::tomorrow()->addDays(4)->format('Y-m-d'),
         ];
