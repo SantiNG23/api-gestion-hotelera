@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\CalculatePriceRequest;
 use App\Http\Requests\ReservationPaymentRequest;
 use App\Http\Requests\ReservationQuoteRequest;
 use App\Http\Requests\ReservationRequest;
@@ -169,28 +170,17 @@ class ReservationController extends Controller
     /**
      * Calcular precio de reserva basado en cabaña, fechas y cantidad de huéspedes
      */
-    public function calculatePrice(Request $request, PriceCalculatorService $priceCalculator): JsonResponse
+    public function calculatePrice(CalculatePriceRequest $request, PriceCalculatorService $priceCalculator): JsonResponse
     {
-        $validated = $request->validate([
-            'cabin_id' => 'required|integer|exists:cabins,id',
-            'check_in_date' => 'required|date|date_format:Y-m-d|after_or_equal:today',
-            'check_out_date' => 'required|date|date_format:Y-m-d|after:check_in_date',
-            'num_guests' => 'required|integer|min:2|max:255',
-        ]);
+        $validated = $request->validated();
 
         $cabin = Cabin::findOrFail($validated['cabin_id']);
 
         // Validar que num_guests no exceda la capacidad
         if ($validated['num_guests'] > $cabin->capacity) {
-            return response()->json([
-                'success' => false,
-                'message' => 'La cantidad de huéspedes excede la capacidad de la cabaña',
-                'errors' => [
-                    'num_guests' => [
-                        "La cabaña '{$cabin->name}' tiene capacidad para {$cabin->capacity} personas máximo"
-                    ]
-                ]
-            ], 422);
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'num_guests' => ["La cabaña '{$cabin->name}' tiene capacidad para {$cabin->capacity} personas máximo"]
+            ]);
         }
 
         $checkIn = \Carbon\Carbon::parse($validated['check_in_date']);
@@ -211,5 +201,4 @@ class ReservationController extends Controller
             'pricing_breakdown' => $priceDetails['breakdown'],
         ]);
     }
-
 }
