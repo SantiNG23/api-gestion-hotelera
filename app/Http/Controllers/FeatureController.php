@@ -29,14 +29,10 @@ class FeatureController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        try {
-            $params = $this->getQueryParams($request);
-            $features = $this->featureService->getFeatures($params);
+        $params = $this->getQueryParams($request);
+        $features = $this->featureService->getFeatures($params);
 
-            return $this->paginatedResponse($features, FeatureResource::class);
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->paginatedResponse($features, FeatureResource::class);
     }
 
     /**
@@ -44,17 +40,13 @@ class FeatureController extends Controller
      */
     public function store(FeatureRequest $request): JsonResponse
     {
-        try {
-            $feature = $this->featureService->createFeature($request->validated());
+        $feature = $this->featureService->createFeature($request->validated());
 
-            return $this->successResponse(
-                $this->transformResource($feature),
-                'Característica creada exitosamente',
-                201
-            );
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse(
+            $this->transformResource($feature),
+            'Característica creada exitosamente',
+            201
+        );
     }
 
     /**
@@ -62,13 +54,9 @@ class FeatureController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        try {
-            $feature = $this->featureService->getFeature($id);
+        $feature = $this->featureService->getFeature($id);
 
-            return $this->successResponse($this->transformResource($feature));
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse($this->transformResource($feature));
     }
 
     /**
@@ -76,16 +64,12 @@ class FeatureController extends Controller
      */
     public function update(FeatureRequest $request, int $id): JsonResponse
     {
-        try {
-            $feature = $this->featureService->updateFeature($id, $request->validated());
+        $feature = $this->featureService->updateFeature($id, $request->validated());
 
-            return $this->successResponse(
-                $this->transformResource($feature),
-                'Característica actualizada exitosamente'
-            );
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse(
+            $this->transformResource($feature),
+            'Característica actualizada exitosamente'
+        );
     }
 
     /**
@@ -93,13 +77,9 @@ class FeatureController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
-        try {
-            $this->featureService->deleteFeature($id);
+        $this->featureService->deleteFeature($id);
 
-            return $this->successResponse(null, 'Característica eliminada exitosamente');
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse(null, 'Característica eliminada exitosamente');
     }
 }
 

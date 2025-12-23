@@ -62,13 +62,9 @@ class ClientController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        try {
-            $client = $this->clientService->getClientWithReservations($id);
+        $client = $this->clientService->getClientWithReservations($id);
 
-            return $this->successResponse($this->transformResource($client));
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse($this->transformResource($client));
     }
 
     /**
@@ -76,16 +72,12 @@ class ClientController extends Controller
      */
     public function update(ClientRequest $request, int $id): JsonResponse
     {
-        try {
-            $client = $this->clientService->updateClient($id, $request->validated());
+        $client = $this->clientService->updateClient($id, $request->validated());
 
-            return $this->successResponse(
-                $this->transformResource($client),
-                'Cliente actualizado exitosamente'
-            );
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse(
+            $this->transformResource($client),
+            'Cliente actualizado exitosamente'
+        );
     }
 
     /**
@@ -93,13 +85,9 @@ class ClientController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
-        try {
-            $this->clientService->deleteClient($id);
+        $this->clientService->deleteClient($id);
 
-            return $this->successResponse(null, 'Cliente eliminado exitosamente');
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse(null, 'Cliente eliminado exitosamente');
     }
 
     /**
@@ -107,17 +95,13 @@ class ClientController extends Controller
      */
     public function searchByDni(string $dni): JsonResponse
     {
-        try {
-            $client = $this->clientService->searchByDni($dni);
+        $client = $this->clientService->searchByDni($dni);
 
-            if (!$client) {
-                return $this->errorResponse('Cliente no encontrado', 404);
-            }
-
-            return $this->successResponse($this->transformResource($client));
-        } catch (\Exception $e) {
-            return $this->handleError($e);
+        if (!$client) {
+            return $this->errorResponse('Cliente no encontrado', 404);
         }
+
+        return $this->successResponse($this->transformResource($client));
     }
 }
 

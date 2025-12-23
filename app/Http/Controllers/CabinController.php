@@ -29,14 +29,10 @@ class CabinController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        try {
-            $params = $this->getQueryParams($request);
-            $cabins = $this->cabinService->getCabins($params);
+        $params = $this->getQueryParams($request);
+        $cabins = $this->cabinService->getCabins($params);
 
-            return $this->paginatedResponse($cabins, CabinResource::class);
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->paginatedResponse($cabins, CabinResource::class);
     }
 
     /**
@@ -44,17 +40,13 @@ class CabinController extends Controller
      */
     public function store(CabinRequest $request): JsonResponse
     {
-        try {
-            $cabin = $this->cabinService->createCabin($request->validated());
+        $cabin = $this->cabinService->createCabin($request->validated());
 
-            return $this->successResponse(
-                $this->transformResource($cabin),
-                'Cabaña creada exitosamente',
-                201
-            );
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse(
+            $this->transformResource($cabin),
+            'Cabaña creada exitosamente',
+            201
+        );
     }
 
     /**
@@ -62,13 +54,9 @@ class CabinController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        try {
-            $cabin = $this->cabinService->getCabin($id);
+        $cabin = $this->cabinService->getCabin($id);
 
-            return $this->successResponse($this->transformResource($cabin));
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse($this->transformResource($cabin));
     }
 
     /**
@@ -76,16 +64,12 @@ class CabinController extends Controller
      */
     public function update(CabinRequest $request, int $id): JsonResponse
     {
-        try {
-            $cabin = $this->cabinService->updateCabin($id, $request->validated());
+        $cabin = $this->cabinService->updateCabin($id, $request->validated());
 
-            return $this->successResponse(
-                $this->transformResource($cabin),
-                'Cabaña actualizada exitosamente'
-            );
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse(
+            $this->transformResource($cabin),
+            'Cabaña actualizada exitosamente'
+        );
     }
 
     /**
@@ -93,13 +77,9 @@ class CabinController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
-        try {
-            $this->cabinService->deleteCabin($id);
+        $this->cabinService->deleteCabin($id);
 
-            return $this->successResponse(null, 'Cabaña eliminada exitosamente');
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse(null, 'Cabaña eliminada exitosamente');
     }
 }
 
