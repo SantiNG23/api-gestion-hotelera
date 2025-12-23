@@ -23,7 +23,7 @@ class PriceGroupService extends Service
      */
     public function getPriceGroups(array $params): LengthAwarePaginator
     {
-        $query = $this->model->query()->with('priceRanges');
+        $query = $this->model->query();
         $query = $this->getFilteredAndSorted($query, $params);
 
         return $this->getAll($params['page'], $params['per_page'], $query);
@@ -83,11 +83,19 @@ class PriceGroupService extends Service
     }
 
     /**
-     * Elimina un grupo de precio
+     * Elimina un grupo de precio (eliminación completa / hard delete)
+     * Junto con todos sus precios de cabaña y rangos de precio asociados
      */
     public function deletePriceGroup(int $id): bool
     {
-        return $this->delete($id);
+        $priceGroup = $this->getById($id);
+        
+        // Eliminar en cascada antes del hard delete
+        $priceGroup->priceRanges()->forceDelete();
+        $priceGroup->cabinPricesByGuests()->forceDelete();
+        
+        // Realizar eliminación completa del grupo
+        return (bool) $priceGroup->forceDelete();
     }
 
     /**

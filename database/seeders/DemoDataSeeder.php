@@ -54,43 +54,31 @@ class DemoDataSeeder extends Seeder
     {
         $this->command->info('Seeding Pricing...');
 
-        // Crear grupos de precios
+        // Crear solo 4 grupos de precios como se requiere
         $priceGroups = [
             [
                 'name' => 'Temporada Baja',
-                'price_per_night' => 80.00,
-                'priority' => 1,
-                'is_default' => false,
-            ],
-            [
-                'name' => 'Temporada Media',
-                'price_per_night' => 120.00,
-                'priority' => 2,
-                'is_default' => false,
+                'price_per_night' => 100.00,
+                'priority' => 0,
+                'is_default' => true,  // Por defecto - se aplica a todas las fechas sin rango específico
             ],
             [
                 'name' => 'Temporada Alta',
                 'price_per_night' => 180.00,
-                'priority' => 3,
+                'priority' => 10,
                 'is_default' => false,
             ],
             [
-                'name' => 'Fin de Semana Largo',
-                'price_per_night' => 200.00,
-                'priority' => 4,
-                'is_default' => false,
-            ],
-            [
-                'name' => 'Fiestas y Vacaciones',
-                'price_per_night' => 300.00,
+                'name' => 'Descuentos',
+                'price_per_night' => 80.00,
                 'priority' => 5,
                 'is_default' => false,
             ],
             [
-                'name' => 'Tarifa por Defecto',
-                'price_per_night' => 100.00,
-                'priority' => 0,
-                'is_default' => true,
+                'name' => 'Feriados',
+                'price_per_night' => 250.00,
+                'priority' => 20,  // Prioridad más alta
+                'is_default' => false,
             ],
         ];
 
@@ -104,52 +92,34 @@ class DemoDataSeeder extends Seeder
             $groupsCreated[$group->name] = $group;
         }
 
-        // Crear rangos de precios (cubren varios meses para pruebas realistas)
+        // Crear rangos de precios solo para algunos grupos
+        // El grupo "Temporada Baja" NO tiene rangos porque es el por defecto
         $today = Carbon::now();
 
-        // Rangos de ejemplo que cubren diferentes períodos del año
         $priceRanges = [
-            // Temporada Media: enero, febrero, marzo (veranos moderados)
-            [
-                'price_group' => 'Temporada Media',
-                'start_date' => $today->copy()->startOfYear()->format('Y-m-d'),
-                'end_date' => $today->copy()->startOfYear()->addMonths(2)->endOfMonth()->format('Y-m-d'),
-            ],
-            // Temporada Baja: abril-junio (invierno)
-            [
-                'price_group' => 'Temporada Baja',
-                'start_date' => $today->copy()->startOfYear()->addMonths(3)->format('Y-m-d'),
-                'end_date' => $today->copy()->startOfYear()->addMonths(5)->endOfMonth()->format('Y-m-d'),
-            ],
-            // Temporada Media: julio-agosto (invierno moderado)
-            [
-                'price_group' => 'Temporada Media',
-                'start_date' => $today->copy()->startOfYear()->addMonths(6)->format('Y-m-d'),
-                'end_date' => $today->copy()->startOfYear()->addMonths(7)->endOfMonth()->format('Y-m-d'),
-            ],
-            // Temporada Alta: septiembre-noviembre (primavera/verano temprano)
+            // Temporada Alta: Diciembre-Enero-Febrero (verano)
             [
                 'price_group' => 'Temporada Alta',
-                'start_date' => $today->copy()->startOfYear()->addMonths(8)->format('Y-m-d'),
-                'end_date' => $today->copy()->startOfYear()->addMonths(10)->endOfMonth()->format('Y-m-d'),
+                'start_date' => $today->copy()->startOfYear()->addMonths(11)->format('Y-m-d'), // Diciembre
+                'end_date' => $today->copy()->addYear()->startOfYear()->addMonths(1)->endOfMonth()->format('Y-m-d'), // Febrero año siguiente
             ],
-            // Fiestas: diciembre (navidad y año nuevo)
+            // Temporada Alta: Julio (vacaciones de invierno)
             [
-                'price_group' => 'Fiestas y Vacaciones',
-                'start_date' => $today->copy()->startOfYear()->addMonths(11)->format('Y-m-d'),
-                'end_date' => $today->copy()->endOfYear()->format('Y-m-d'),
+                'price_group' => 'Temporada Alta',
+                'start_date' => $today->copy()->startOfYear()->addMonths(6)->format('Y-m-d'), // Julio
+                'end_date' => $today->copy()->startOfYear()->addMonths(6)->endOfMonth()->format('Y-m-d'),
             ],
-            // Rango futuro: próximos 6 meses desde hoy
+            // Descuentos: Mayo-Junio (temporada baja turística)
             [
-                'price_group' => 'Temporada Media',
-                'start_date' => $today->copy()->addMonths(1)->format('Y-m-d'),
-                'end_date' => $today->copy()->addMonths(3)->format('Y-m-d'),
+                'price_group' => 'Descuentos',
+                'start_date' => $today->copy()->startOfYear()->addMonths(4)->format('Y-m-d'), // Mayo
+                'end_date' => $today->copy()->startOfYear()->addMonths(5)->endOfMonth()->format('Y-m-d'), // Junio
             ],
-            // Fin de semana largo próximo (si existe)
+            // Feriados específicos (ejemplo: fin de año)
             [
-                'price_group' => 'Fin de Semana Largo',
-                'start_date' => $today->copy()->addDays(7)->format('Y-m-d'),
-                'end_date' => $today->copy()->addDays(10)->format('Y-m-d'),
+                'price_group' => 'Feriados',
+                'start_date' => $today->copy()->endOfYear()->subDays(6)->format('Y-m-d'), // 25 dic
+                'end_date' => $today->copy()->endOfYear()->addDays(2)->format('Y-m-d'), // 2 ene
             ],
         ];
 
@@ -173,7 +143,11 @@ class DemoDataSeeder extends Seeder
             }
         }
 
-        $this->command->line('  ✓ Pricing seeded: 6 price groups + multiple price ranges');
+        $this->command->line('  ✓ Pricing seeded: 4 price groups (Temporada Baja, Temporada Alta, Descuentos, Feriados)');
+        $this->command->line('    • Temporada Baja: Por defecto (sin rangos de fecha) - Priority 0');
+        $this->command->line('    • Descuentos: Mayo-Junio - Priority 5');
+        $this->command->line('    • Temporada Alta: Diciembre-Febrero, Julio - Priority 10');
+        $this->command->line('    • Feriados: Fin de año específico - Priority 20 (mayor prioridad)');
     }
 
     /**

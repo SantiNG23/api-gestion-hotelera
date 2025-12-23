@@ -11,6 +11,8 @@ use App\Http\Resources\ReservationResource;
 use App\Services\ReservationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Services\PriceCalculatorService;
+use App\Models\Cabin;
 
 class ReservationController extends Controller
 {
@@ -90,9 +92,10 @@ class ReservationController extends Controller
     public function quote(ReservationQuoteRequest $request): JsonResponse
     {
         $quote = $this->reservationService->generateQuote(
-            $request->validated()['cabin_id'],
+            (int) $request->validated()['cabin_id'],
             $request->validated()['check_in_date'],
-            $request->validated()['check_out_date']
+            $request->validated()['check_out_date'],
+            (int) $request->validated()['num_guests']
         );
 
         return $this->successResponse($quote);
@@ -162,4 +165,51 @@ class ReservationController extends Controller
             'Reserva cancelada exitosamente'
         );
     }
+
+    /**
+     * Calcular precio de reserva basado en cabaña, fechas y cantidad de huéspedes
+     */
+    public function calculatePrice(Request $request, PriceCalculatorService $priceCalculator): JsonResponse
+    {
+        $validated = $request->validate([
+            'cabin_id' => 'required|integer|exists:cabins,id',
+            'check_in_date' => 'required|date|date_format:Y-m-d|after_or_equal:today',
+            'check_out_date' => 'required|date|date_format:Y-m-d|after:check_in_date',
+            'num_guests' => 'required|integer|min:2|max:255',
+        ]);
+
+        $cabin = Cabin::findOrFail($validated['cabin_id']);
+
+        // Validar que num_guests no exceda la capacidad
+        if ($validated['num_guests'] > $cabin->capacity) {
+            return response()->json([
+                'success' => false,
+                'message' => 'La cantidad de huéspedes excede la capacidad de la cabaña',
+                'errors' => [
+                    'num_guests' => [
+                        "La cabaña '{$cabin->name}' tiene capacidad para {$cabin->capacity} personas máximo"
+                    ]
+                ]
+            ], 422);
+        }
+
+        $checkIn = \Carbon\Carbon::parse($validated['check_in_date']);
+        $checkOut = \Carbon\Carbon::parse($validated['check_out_date']);
+
+        $priceDetails = $priceCalculator->calculatePrice($checkIn, $checkOut, $cabin->id, (int) $validated['num_guests']);
+
+        return $this->successResponse([
+            'cabin_id' => $cabin->id,
+            'cabin_name' => $cabin->name,
+            'check_in_date' => $validated['check_in_date'],
+            'check_out_date' => $validated['check_out_date'],
+            'num_guests' => $validated['num_guests'],
+            'nights' => $priceDetails['nights'],
+            'total_price' => $priceDetails['total'],
+            'deposit_amount' => $priceDetails['deposit'],
+            'balance_amount' => $priceDetails['balance'],
+            'pricing_breakdown' => $priceDetails['breakdown'],
+        ]);
+    }
+
 }

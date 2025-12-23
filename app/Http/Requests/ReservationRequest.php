@@ -25,6 +25,7 @@ class ReservationRequest extends ApiRequest
 
         $rules = [
             'cabin_id' => [$isUpdate ? 'sometimes' : 'required', 'integer', 'exists:cabins,id'],
+            'num_guests' => [$isUpdate ? 'sometimes' : 'required', 'integer', 'min:2', 'max:255'],
             'check_in_date' => $checkInRules,
             'check_out_date' => $checkOutRules,
             'notes' => ['nullable', 'string', 'max:2000'],
