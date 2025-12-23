@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\PriceRangeApplicableRatesRequest;
 use App\Http\Requests\PriceRangeRequest;
 use App\Http\Resources\PriceRangeResource;
 use App\Services\PriceRangeService;
@@ -29,14 +30,10 @@ class PriceRangeController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        try {
-            $params = $this->getQueryParams($request);
-            $priceRanges = $this->priceRangeService->getPriceRanges($params);
+        $params = $this->getQueryParams($request);
+        $priceRanges = $this->priceRangeService->getPriceRanges($params);
 
-            return $this->paginatedResponse($priceRanges, PriceRangeResource::class);
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->paginatedResponse($priceRanges, PriceRangeResource::class);
     }
 
     /**
@@ -44,17 +41,13 @@ class PriceRangeController extends Controller
      */
     public function store(PriceRangeRequest $request): JsonResponse
     {
-        try {
-            $priceRange = $this->priceRangeService->createPriceRange($request->validated());
+        $priceRange = $this->priceRangeService->createPriceRange($request->validated());
 
-            return $this->successResponse(
-                $this->transformResource($priceRange->load('priceGroup')),
-                'Rango de precio creado exitosamente',
-                201
-            );
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse(
+            $this->transformResource($priceRange->load('priceGroup')),
+            'Rango de precio creado exitosamente',
+            201
+        );
     }
 
     /**
@@ -62,13 +55,9 @@ class PriceRangeController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        try {
-            $priceRange = $this->priceRangeService->getPriceRange($id);
+        $priceRange = $this->priceRangeService->getPriceRange($id);
 
-            return $this->successResponse($this->transformResource($priceRange));
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse($this->transformResource($priceRange));
     }
 
     /**
@@ -76,16 +65,12 @@ class PriceRangeController extends Controller
      */
     public function update(PriceRangeRequest $request, int $id): JsonResponse
     {
-        try {
-            $priceRange = $this->priceRangeService->updatePriceRange($id, $request->validated());
+        $priceRange = $this->priceRangeService->updatePriceRange($id, $request->validated());
 
-            return $this->successResponse(
-                $this->transformResource($priceRange->load('priceGroup')),
-                'Rango de precio actualizado exitosamente'
-            );
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse(
+            $this->transformResource($priceRange->load('priceGroup')),
+            'Rango de precio actualizado exitosamente'
+        );
     }
 
     /**
@@ -93,40 +78,28 @@ class PriceRangeController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
-        try {
-            $this->priceRangeService->deletePriceRange($id);
+        $this->priceRangeService->deletePriceRange($id);
 
-            return $this->successResponse(null, 'Rango de precio eliminado exitosamente');
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse(null, 'Rango de precio eliminado exitosamente');
     }
 
     /**
      * Obtiene las tarifas aplicables para un rango de fechas
      * con algoritmo de prioridad (precio ganador)
      */
-    public function getApplicableRates(Request $request): JsonResponse
+    public function getApplicableRates(PriceRangeApplicableRatesRequest $request): JsonResponse
     {
-        try {
-            $request->validate([
-                'start_date' => ['required', 'date_format:Y-m-d'],
-                'end_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:start_date'],
-            ]);
 
-            $rates = $this->priceRangeService->getApplicableRates(
-                $request->input('start_date'),
-                $request->input('end_date')
-            );
+        $rates = $this->priceRangeService->getApplicableRates(
+            $request->input('start_date'),
+            $request->input('end_date')
+        );
 
-            return $this->successResponse([
-                'start_date' => $request->input('start_date'),
-                'end_date' => $request->input('end_date'),
-                'rates' => $rates,
-            ]);
-        } catch (\Exception $e) {
-            return $this->handleError($e);
-        }
+        return $this->successResponse([
+            'start_date' => $request->input('start_date'),
+            'end_date' => $request->input('end_date'),
+            'rates' => $rates,
+        ]);
     }
 }
 
