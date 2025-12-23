@@ -45,11 +45,10 @@ class PriceRangeService extends Service
      */
     public function createPriceRange(array $data): PriceRange
     {
-        // Validar que price_group_id pertenezca al mismo tenant
-        $this->validatePriceGroupTenant($data['price_group_id']);
+        // Validar y obtener el grupo en una sola operación
+        $priceGroup = $this->getPriceGroupOrThrow($data['price_group_id']);
 
-        // Asegurar que tenant_id coincida con el del price_group
-        $priceGroup = PriceGroup::findOrFail($data['price_group_id']);
+        // Asegurar que el tenant_id coincida con el del grupo
         $data['tenant_id'] = $priceGroup->tenant_id;
 
         return $this->create($data);
@@ -62,10 +61,8 @@ class PriceRangeService extends Service
      */
     public function updatePriceRange(int $id, array $data): PriceRange
     {
-        $priceRange = $this->getById($id);
-
         if (isset($data['price_group_id'])) {
-            $this->validatePriceGroupTenant($data['price_group_id']);
+            $this->getPriceGroupOrThrow($data['price_group_id']);
         }
 
         return $this->update($id, $data);
@@ -123,6 +120,12 @@ class PriceRangeService extends Service
             }])
             ->get();
 
+        // Obtener el grupo por defecto del tenant
+        $defaultGroup = PriceGroup::withoutGlobalScope('tenant')
+            ->where('tenant_id', $tenantId)
+            ->where('is_default', true)
+            ->first();
+
         $result = [];
         $currentDate = $start->copy();
 
@@ -139,10 +142,12 @@ class PriceRangeService extends Service
             if ($activePriceRanges->isNotEmpty()) {
                 // Ordenar por prioridad DESC, luego por created_at DESC
                 $winnerRange = $activePriceRanges
-                    ->sortByDesc(function ($range) {
-                        return $range->priceGroup->priority;
+                    ->sort(function ($a, $b) {
+                        if ($a->priceGroup->priority !== $b->priceGroup->priority) {
+                            return $b->priceGroup->priority <=> $a->priceGroup->priority;
+                        }
+                        return $b->created_at <=> $a->created_at;
                     })
-                    ->values()
                     ->first();
 
                 // Si hay múltiples con la misma prioridad, seleccionar el más reciente
@@ -150,11 +155,22 @@ class PriceRangeService extends Service
                     return $range->priceGroup->priority === $winnerRange->priceGroup->priority;
                 });
 
-                if ($sameMaxPriority->count() > 1) {
-                    $winnerRange = $sameMaxPriority->sortByDesc('created_at')->first();
-                }
-
-                $result[$dayString] = (float) $winnerRange->priceGroup->price_per_night;
+                $result[$dayString] = [
+                    'price' => (float) $winnerRange->priceGroup->price_per_night,
+                    'group_name' => $winnerRange->priceGroup->name,
+                ];
+            } elseif ($defaultGroup) {
+                // Fallback al grupo por defecto
+                $result[$dayString] = [
+                    'price' => (float) $defaultGroup->price_per_night,
+                    'group_name' => $defaultGroup->name,
+                ];
+            } else {
+                // Si no hay nada de nada, precio 0
+                $result[$dayString] = [
+                    'price' => 0.0,
+                    'group_name' => 'Sin tarifa configurada',
+                ];
             }
 
             $currentDate->addDay();
@@ -164,35 +180,21 @@ class PriceRangeService extends Service
     }
 
     /**
-     * Valida que el grupo de precio pertenezca al tenant actual
+     * Obtiene el grupo de precio validando su existencia y pertenencia al tenant
      *
      * @throws ValidationException
      */
-    private function validatePriceGroupTenant(int $priceGroupId): void
+    private function getPriceGroupOrThrow(int $priceGroupId): PriceGroup
     {
         $priceGroup = PriceGroup::find($priceGroupId);
 
         if (!$priceGroup) {
             throw ValidationException::withMessages([
-                'price_group_id' => ['El grupo de precio no existe'],
+                'price_group_id' => ['El grupo de precio no existe para este tenant'],
             ]);
         }
 
-        $tenantId = Auth::user()?->tenant_id;
-
-        if ($tenantId && $priceGroup->tenant_id !== $tenantId) {
-            throw ValidationException::withMessages([
-                'price_group_id' => ['El grupo de precio no pertenece a este tenant'],
-            ]);
-        }
-    }
-
-    /**
-     * Filtro por grupo de precio
-     */
-    protected function filterByPriceGroupId(Builder $query, int $value): Builder
-    {
-        return $query->where('price_group_id', $value);
+        return $priceGroup;
     }
 
     /**

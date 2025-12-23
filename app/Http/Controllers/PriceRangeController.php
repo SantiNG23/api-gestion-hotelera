@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\PriceRangeApplicableRatesRequest;
 use App\Http\Requests\PriceRangeRequest;
 use App\Http\Resources\PriceRangeResource;
 use App\Services\PriceRangeService;
@@ -43,7 +44,7 @@ class PriceRangeController extends Controller
         $priceRange = $this->priceRangeService->createPriceRange($request->validated());
 
         return $this->successResponse(
-            new PriceRangeResource($priceRange->load('priceGroup')),
+            $this->transformResource($priceRange->load('priceGroup')),
             'Rango de precio creado exitosamente',
             201
         );
@@ -56,7 +57,7 @@ class PriceRangeController extends Controller
     {
         $priceRange = $this->priceRangeService->getPriceRange($id);
 
-        return $this->successResponse(new PriceRangeResource($priceRange));
+        return $this->successResponse($this->transformResource($priceRange));
     }
 
     /**
@@ -67,7 +68,7 @@ class PriceRangeController extends Controller
         $priceRange = $this->priceRangeService->updatePriceRange($id, $request->validated());
 
         return $this->successResponse(
-            new PriceRangeResource($priceRange->load('priceGroup')),
+            $this->transformResource($priceRange->load('priceGroup')),
             'Rango de precio actualizado exitosamente'
         );
     }
@@ -85,17 +86,9 @@ class PriceRangeController extends Controller
     /**
      * Obtiene las tarifas aplicables para un rango de fechas
      * con algoritmo de prioridad (precio ganador)
-     *
-     * Query parameters:
-     * - start_date: Fecha de inicio (Y-m-d)
-     * - end_date: Fecha de fin (Y-m-d)
      */
-    public function getApplicableRates(Request $request): JsonResponse
+    public function getApplicableRates(PriceRangeApplicableRatesRequest $request): JsonResponse
     {
-        $request->validate([
-            'start_date' => ['required', 'date_format:Y-m-d'],
-            'end_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:start_date'],
-        ]);
 
         $rates = $this->priceRangeService->getApplicableRates(
             $request->input('start_date'),

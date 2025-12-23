@@ -10,15 +10,18 @@ use App\Models\ReservationPayment;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use App\Events\ReservationCreated;
 
 class ReservationService extends Service
 {
     public function __construct(
         private readonly PriceCalculatorService $priceCalculator,
-        private readonly AvailabilityService $availabilityService
+        private readonly AvailabilityService $availabilityService,
+        private readonly ClientService $clientService
     ) {
         parent::__construct(new Reservation());
     }
@@ -60,11 +63,25 @@ class ReservationService extends Service
             ]);
         }
 
-        // Calcular precios automáticamente
-        $priceDetails = $this->priceCalculator->calculatePrice($checkIn, $checkOut);
+        // Calcular precios automáticamente (num_guests es obligatorio en el request si no es bloqueo)
+        $isBlocked = (bool) ($data['is_blocked'] ?? false);
+        $numGuests = (int) ($data['num_guests'] ?? 2);
 
-        return DB::transaction(function () use ($data, $priceDetails) {
+        $priceDetails = $isBlocked
+            ? ['total' => 0, 'deposit' => 0, 'balance' => 0]
+            : $this->priceCalculator->calculatePrice($checkIn, $checkOut, (int) $data['cabin_id'], $numGuests);
+
+        return DB::transaction(function () use ($data, $priceDetails, $isBlocked, $numGuests) {
             $tenantId = $data['tenant_id'] ?? Auth::user()->tenant_id;
+
+            // Si es un bloqueo, forzar el cliente técnico de bloqueo
+            if ($isBlocked) {
+                $data['client'] = [
+                    'name' => 'BLOQUEO DE FECHAS',
+                    'dni' => Client::DNI_BLOCK,
+                ];
+            }
+
             $client = $this->resolveClient(
                 $tenantId,
                 $data['client'] ?? null
@@ -74,14 +91,16 @@ class ReservationService extends Service
                 'tenant_id' => $tenantId,
                 'client_id' => $client->id,
                 'cabin_id' => $data['cabin_id'],
+                'num_guests' => $numGuests,
                 'check_in_date' => $data['check_in_date'],
                 'check_out_date' => $data['check_out_date'],
                 'total_price' => $priceDetails['total'],
                 'deposit_amount' => $priceDetails['deposit'],
                 'balance_amount' => $priceDetails['balance'],
                 'status' => Reservation::STATUS_PENDING_CONFIRMATION,
-                'pending_until' => now()->addHours((int) ($data['pending_hours'] ?? 48)),
+                'pending_until' => $isBlocked ? null : now()->addHours((int) ($data['pending_hours'] ?? 48)),
                 'notes' => $data['notes'] ?? null,
+                'is_blocked' => $isBlocked,
             ]);
 
             // Crear huéspedes si se proporcionan
@@ -89,7 +108,11 @@ class ReservationService extends Service
                 $this->syncGuests($reservation, $data['guests']);
             }
 
-            return $reservation->load(['client', 'cabin', 'guests']);
+            $reservation = $reservation->load(['client', 'cabin', 'guests']);
+            
+            ReservationCreated::dispatch($reservation);
+
+            return $reservation;
         });
     }
 
@@ -109,30 +132,49 @@ class ReservationService extends Service
             ]);
         }
 
-        // Si cambian las fechas o la cabaña, recalcular precio y validar disponibilidad
+        // Si cambian las fechas, la cabaña o el estado de bloqueo, recalcular precio y validar disponibilidad
         $needsRecalculation = isset($data['check_in_date'])
             || isset($data['check_out_date'])
-            || isset($data['cabin_id']);
+            || isset($data['cabin_id'])
+            || isset($data['is_blocked'])
+            || isset($data['num_guests']);
 
         if ($needsRecalculation) {
             $checkIn = Carbon::parse($data['check_in_date'] ?? $reservation->check_in_date);
             $checkOut = Carbon::parse($data['check_out_date'] ?? $reservation->check_out_date);
             $cabinId = $data['cabin_id'] ?? $reservation->cabin_id;
+            $isBlocked = (bool) ($data['is_blocked'] ?? $reservation->is_blocked);
+            $numGuests = (int) ($data['num_guests'] ?? $reservation->num_guests ?? 2);
+            $numGuests = max(1, $numGuests);
 
             // Validar disponibilidad (excluyendo la reserva actual)
-            if (!$this->availabilityService->isAvailable($cabinId, $checkIn, $checkOut, $reservation->id)) {
+            if (!$this->availabilityService->isAvailable((int) $cabinId, $checkIn, $checkOut, $reservation->id)) {
                 throw ValidationException::withMessages([
                     'cabin_id' => ['La cabaña no está disponible para las fechas seleccionadas'],
                 ]);
             }
 
-            $priceDetails = $this->priceCalculator->calculatePrice($checkIn, $checkOut);
+            // Si está bloqueada, precios en 0; si no, calcular normalmente
+            $priceDetails = $isBlocked
+                ? ['total' => 0, 'deposit' => 0, 'balance' => 0]
+                : $this->priceCalculator->calculatePrice($checkIn, $checkOut, (int) $cabinId, $numGuests);
+
             $data['total_price'] = $priceDetails['total'];
             $data['deposit_amount'] = $priceDetails['deposit'];
             $data['balance_amount'] = $priceDetails['balance'];
+            $data['is_blocked'] = $isBlocked;
+            $data['num_guests'] = $numGuests;
+
+            // Si es un bloqueo, forzar el cliente técnico de bloqueo
+            if ($isBlocked) {
+                $data['client'] = [
+                    'name' => 'BLOQUEO DE FECHAS',
+                    'dni' => Client::DNI_BLOCK,
+                ];
+            }
         }
 
-        // Resolver cliente si se envía client
+        // Resolver cliente si se envía client (o si lo forzamos arriba por ser bloqueo)
         if (isset($data['client'])) {
             $tenantId = $reservation->tenant_id ?? Auth::user()->tenant_id;
             $client = $this->resolveClient(
@@ -147,12 +189,14 @@ class ReservationService extends Service
             $updateData = array_filter([
                 'client_id' => $data['client_id'] ?? null,
                 'cabin_id' => $data['cabin_id'] ?? null,
+                'num_guests' => $data['num_guests'] ?? null,
                 'check_in_date' => $data['check_in_date'] ?? null,
                 'check_out_date' => $data['check_out_date'] ?? null,
                 'total_price' => $data['total_price'] ?? null,
                 'deposit_amount' => $data['deposit_amount'] ?? null,
                 'balance_amount' => $data['balance_amount'] ?? null,
                 'notes' => $data['notes'] ?? null,
+                'is_blocked' => $data['is_blocked'] ?? null,
             ], fn ($value) => $value !== null);
 
             if (!empty($updateData)) {
@@ -353,7 +397,7 @@ class ReservationService extends Service
     /**
      * Genera una cotización
      */
-    public function generateQuote(int $cabinId, string $checkIn, string $checkOut): array
+    public function generateQuote(int $cabinId, string $checkIn, string $checkOut, int $numGuests): array
     {
         $checkInDate = Carbon::parse($checkIn);
         $checkOutDate = Carbon::parse($checkOut);
@@ -361,7 +405,7 @@ class ReservationService extends Service
         // Verificar disponibilidad
         $isAvailable = $this->availabilityService->isAvailable($cabinId, $checkInDate, $checkOutDate);
 
-        $quote = $this->priceCalculator->generateQuote($cabinId, $checkIn, $checkOut);
+        $quote = $this->priceCalculator->generateQuote($cabinId, $checkIn, $checkOut, $numGuests);
         $quote['is_available'] = $isAvailable;
 
         return $quote;
@@ -394,22 +438,6 @@ class ReservationService extends Service
     protected function filterByStatus(Builder $query, string $value): Builder
     {
         return $query->where('status', $value);
-    }
-
-    /**
-     * Filtro por cliente
-     */
-    protected function filterByClientId(Builder $query, int $value): Builder
-    {
-        return $query->where('client_id', $value);
-    }
-
-    /**
-     * Filtro por cabaña
-     */
-    protected function filterByCabinId(Builder $query, int $value): Builder
-    {
-        return $query->where('cabin_id', $value);
     }
 
     /**
@@ -487,63 +515,26 @@ class ReservationService extends Service
     }
 
     /**
-     * Obtiene o crea un cliente a partir de client_id o datos de cliente
+     * Obtiene o crea un cliente a partir de datos de cliente usando el ClientService
      */
     private function resolveClient(int $tenantId, ?array $clientData): Client
     {
-        if ($clientData === null) {
+        if ($clientData === null || empty($clientData['dni'])) {
             throw ValidationException::withMessages([
-                'client' => ['Los datos del cliente son obligatorios'],
+                'client' => ['Los datos del cliente (incluyendo DNI) son obligatorios'],
             ]);
         }
 
-        $existing = Client::where('tenant_id', $tenantId)
-            ->where('dni', $clientData['dni'])
-            ->first();
+        $client = $this->clientService->searchByDni($clientData['dni']);
 
-        if ($existing !== null) {
-            // Sincronizar datos básicos cuando el cliente ya existe
-            $updatableFields = ['name', 'age', 'city', 'phone', 'email'];
-            $updateData = [];
-
-            foreach ($updatableFields as $field) {
-                if (!array_key_exists($field, $clientData)) {
-                    continue;
-                }
-
-                $value = $clientData[$field];
-
-                // No sobreescribimos con null ni con strings vacíos
-                if ($value === null) {
-                    continue;
-                }
-                if (is_string($value)) {
-                    $value = trim($value);
-                    if ($value === '') {
-                        continue;
-                    }
-                }
-
-                if ($existing->{$field} !== $value) {
-                    $updateData[$field] = $value;
-                }
-            }
-
-            if (!empty($updateData)) {
-                $existing->update($updateData);
-            }
-
-            return $existing;
+        if ($client) {
+            // Actualizar datos si el cliente existe (pero no el DNI)
+            $updatableData = Arr::except($clientData, ['dni', 'tenant_id']);
+            return $this->clientService->updateClient($client->id, $updatableData);
         }
 
-        return Client::create([
-            'tenant_id' => $tenantId,
-            'name' => $clientData['name'],
-            'dni' => $clientData['dni'],
-            'age' => $clientData['age'] ?? null,
-            'city' => $clientData['city'] ?? null,
-            'phone' => $clientData['phone'] ?? null,
-            'email' => $clientData['email'] ?? null,
-        ]);
+        // Crear nuevo cliente
+        $clientData['tenant_id'] = $tenantId;
+        return $this->clientService->createClient($clientData);
     }
 }

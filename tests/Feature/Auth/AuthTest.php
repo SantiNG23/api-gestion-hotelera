@@ -208,7 +208,8 @@ class AuthTest extends TestCase
 
         $response->assertStatus(401)
             ->assertJson([
-                'message' => 'Unauthenticated.',
+                'success' => false,
+                'message' => 'No autenticado',
             ]);
     }
 
@@ -220,7 +221,8 @@ class AuthTest extends TestCase
 
         $response->assertStatus(401)
             ->assertJson([
-                'message' => 'Unauthenticated.',
+                'success' => false,
+                'message' => 'No autenticado',
             ]);
     }
 

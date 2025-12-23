@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Http\Resources\ReservationResource;
+use App\Http\Resources\DailySummaryResource;
 use App\Services\DailySummaryService;
+use App\Http\Requests\DailySummaryRequest;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class DailySummaryController extends Controller
 {
@@ -19,26 +19,14 @@ class DailySummaryController extends Controller
     /**
      * Obtiene el resumen diario
      */
-    public function index(Request $request): JsonResponse
+    public function index(DailySummaryRequest $request): JsonResponse
     {
-        $request->validate([
-            'date' => ['nullable', 'date'],
-        ]);
-
         $date = $request->date ? Carbon::parse($request->date) : Carbon::today();
 
         $summary = $this->dailySummaryService->getDailySummary($date);
-        $occupancyStats = $this->dailySummaryService->getOccupancyStats($date);
+        $summary['occupancy'] = $this->dailySummaryService->getOccupancyStats($date);
 
-        return $this->successResponse([
-            'date' => $summary['date'],
-            'has_events' => $summary['has_events'],
-            'check_ins' => ReservationResource::collection($summary['check_ins']),
-            'check_outs' => ReservationResource::collection($summary['check_outs']),
-            'expiring_pending' => ReservationResource::collection($summary['expiring_pending']),
-            'summary' => $summary['summary'],
-            'occupancy' => $occupancyStats,
-        ]);
+        return $this->successResponse(new DailySummaryResource($summary));
     }
 }
 

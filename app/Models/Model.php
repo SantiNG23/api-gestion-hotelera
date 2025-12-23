@@ -42,17 +42,6 @@ abstract class Model extends BaseModel
     ];
 
     /**
-     * Los atributos que deben ser convertidos a fechas.
-     *
-     * @var array
-     */
-    protected $dates = [
-        'created_at',
-        'updated_at',
-        'deleted_at',
-    ];
-
-    /**
      * Los atributos que deben ser convertidos a booleanos.
      *
      * @var array

@@ -80,27 +80,11 @@ class ClientService extends Service
     }
 
     /**
-     * Filtro por nombre
-     */
-    protected function filterByName(Builder $query, string $value): Builder
-    {
-        return $query->where('name', 'like', "%{$value}%");
-    }
-
-    /**
      * Filtro por DNI
      */
     protected function filterByDni(Builder $query, string $value): Builder
     {
         return $query->where('dni', 'like', "%{$value}%");
-    }
-
-    /**
-     * Filtro por ciudad
-     */
-    protected function filterByCity(Builder $query, string $value): Builder
-    {
-        return $query->where('city', 'like', "%{$value}%");
     }
 
     /**

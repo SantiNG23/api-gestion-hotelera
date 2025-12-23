@@ -43,7 +43,7 @@ class FeatureController extends Controller
         $feature = $this->featureService->createFeature($request->validated());
 
         return $this->successResponse(
-            new FeatureResource($feature),
+            $this->transformResource($feature),
             'Característica creada exitosamente',
             201
         );
@@ -56,7 +56,7 @@ class FeatureController extends Controller
     {
         $feature = $this->featureService->getFeature($id);
 
-        return $this->successResponse(new FeatureResource($feature));
+        return $this->successResponse($this->transformResource($feature));
     }
 
     /**
@@ -67,7 +67,7 @@ class FeatureController extends Controller
         $feature = $this->featureService->updateFeature($id, $request->validated());
 
         return $this->successResponse(
-            new FeatureResource($feature),
+            $this->transformResource($feature),
             'Característica actualizada exitosamente'
         );
     }

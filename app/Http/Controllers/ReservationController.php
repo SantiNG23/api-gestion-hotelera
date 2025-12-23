@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\CalculatePriceRequest;
 use App\Http\Requests\ReservationPaymentRequest;
 use App\Http\Requests\ReservationQuoteRequest;
 use App\Http\Requests\ReservationRequest;
@@ -11,6 +12,8 @@ use App\Http\Resources\ReservationResource;
 use App\Services\ReservationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Services\PriceCalculatorService;
+use App\Models\Cabin;
 
 class ReservationController extends Controller
 {
@@ -45,7 +48,7 @@ class ReservationController extends Controller
         $reservation = $this->reservationService->createReservation($request->validated());
 
         return $this->successResponse(
-            new ReservationResource($reservation),
+            $this->transformResource($reservation),
             'Reserva creada exitosamente',
             201
         );
@@ -58,7 +61,7 @@ class ReservationController extends Controller
     {
         $reservation = $this->reservationService->getReservation($id);
 
-        return $this->successResponse(new ReservationResource($reservation));
+        return $this->successResponse($this->transformResource($reservation));
     }
 
     /**
@@ -69,7 +72,7 @@ class ReservationController extends Controller
         $reservation = $this->reservationService->updateReservation($id, $request->validated());
 
         return $this->successResponse(
-            new ReservationResource($reservation),
+            $this->transformResource($reservation),
             'Reserva actualizada exitosamente'
         );
     }
@@ -90,9 +93,10 @@ class ReservationController extends Controller
     public function quote(ReservationQuoteRequest $request): JsonResponse
     {
         $quote = $this->reservationService->generateQuote(
-            $request->validated()['cabin_id'],
+            (int) $request->validated()['cabin_id'],
             $request->validated()['check_in_date'],
-            $request->validated()['check_out_date']
+            $request->validated()['check_out_date'],
+            (int) $request->validated()['num_guests']
         );
 
         return $this->successResponse($quote);
@@ -106,7 +110,7 @@ class ReservationController extends Controller
         $reservation = $this->reservationService->confirm($id, $request->validated());
 
         return $this->successResponse(
-            new ReservationResource($reservation),
+            $this->transformResource($reservation),
             'Reserva confirmada exitosamente'
         );
     }
@@ -119,7 +123,7 @@ class ReservationController extends Controller
         $reservation = $this->reservationService->checkIn($id, $request->validated());
 
         return $this->successResponse(
-            new ReservationResource($reservation),
+            $this->transformResource($reservation),
             'Check-in realizado exitosamente'
         );
     }
@@ -132,7 +136,7 @@ class ReservationController extends Controller
         $reservation = $this->reservationService->checkOut($id);
 
         return $this->successResponse(
-            new ReservationResource($reservation),
+            $this->transformResource($reservation),
             'Check-out realizado exitosamente'
         );
     }
@@ -145,7 +149,7 @@ class ReservationController extends Controller
         $reservation = $this->reservationService->payBalance($id, $request->validated());
 
         return $this->successResponse(
-            new ReservationResource($reservation),
+            $this->transformResource($reservation),
             'Saldo pagado exitosamente'
         );
     }
@@ -158,8 +162,43 @@ class ReservationController extends Controller
         $reservation = $this->reservationService->cancel($id);
 
         return $this->successResponse(
-            new ReservationResource($reservation),
+            $this->transformResource($reservation),
             'Reserva cancelada exitosamente'
         );
+    }
+
+    /**
+     * Calcular precio de reserva basado en cabaña, fechas y cantidad de huéspedes
+     */
+    public function calculatePrice(CalculatePriceRequest $request, PriceCalculatorService $priceCalculator): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $cabin = Cabin::findOrFail($validated['cabin_id']);
+
+        // Validar que num_guests no exceda la capacidad
+        if ($validated['num_guests'] > $cabin->capacity) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'num_guests' => ["La cabaña '{$cabin->name}' tiene capacidad para {$cabin->capacity} personas máximo"]
+            ]);
+        }
+
+        $checkIn = \Carbon\Carbon::parse($validated['check_in_date']);
+        $checkOut = \Carbon\Carbon::parse($validated['check_out_date']);
+
+        $priceDetails = $priceCalculator->calculatePrice($checkIn, $checkOut, $cabin->id, (int) $validated['num_guests']);
+
+        return $this->successResponse([
+            'cabin_id' => $cabin->id,
+            'cabin_name' => $cabin->name,
+            'check_in_date' => $validated['check_in_date'],
+            'check_out_date' => $validated['check_out_date'],
+            'num_guests' => $validated['num_guests'],
+            'nights' => $priceDetails['nights'],
+            'total_price' => $priceDetails['total'],
+            'deposit_amount' => $priceDetails['deposit'],
+            'balance_amount' => $priceDetails['balance'],
+            'pricing_breakdown' => $priceDetails['breakdown'],
+        ]);
     }
 }

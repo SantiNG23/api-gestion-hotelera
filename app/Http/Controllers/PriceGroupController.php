@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\PriceGroupCompleteRequest;
 use App\Http\Requests\PriceGroupRequest;
 use App\Http\Resources\PriceGroupResource;
 use App\Services\PriceGroupService;
@@ -43,7 +44,7 @@ class PriceGroupController extends Controller
         $priceGroup = $this->priceGroupService->createPriceGroup($request->validated());
 
         return $this->successResponse(
-            new PriceGroupResource($priceGroup),
+            $this->transformResource($priceGroup),
             'Grupo de precio creado exitosamente',
             201
         );
@@ -56,7 +57,7 @@ class PriceGroupController extends Controller
     {
         $priceGroup = $this->priceGroupService->getPriceGroup($id);
 
-        return $this->successResponse(new PriceGroupResource($priceGroup));
+        return $this->successResponse($this->transformResource($priceGroup));
     }
 
     /**
@@ -67,7 +68,7 @@ class PriceGroupController extends Controller
         $priceGroup = $this->priceGroupService->updatePriceGroup($id, $request->validated());
 
         return $this->successResponse(
-            new PriceGroupResource($priceGroup),
+            $this->transformResource($priceGroup),
             'Grupo de precio actualizado exitosamente'
         );
     }
@@ -81,5 +82,41 @@ class PriceGroupController extends Controller
 
         return $this->successResponse(null, 'Grupo de precio eliminado exitosamente');
     }
-}
 
+    /**
+     * Crear grupo de precio completo (grupo + cabañas + precios + rangos)
+     */
+    public function storeComplete(PriceGroupCompleteRequest $request): JsonResponse
+    {
+        $priceGroup = $this->priceGroupService->createCompletePriceGroup($request->validated());
+
+        return $this->successResponse(
+            $this->priceGroupService->getCompletePriceGroup($priceGroup->id),
+            'Grupo de precios creado exitosamente',
+            201
+        );
+    }
+
+    /**
+     * Actualizar grupo de precio completo
+     */
+    public function updateComplete(PriceGroupCompleteRequest $request, int $id): JsonResponse
+    {
+        $this->priceGroupService->updateCompletePriceGroup($id, $request->validated());
+
+        return $this->successResponse(
+            $this->priceGroupService->getCompletePriceGroup($id),
+            'Grupo de precios actualizado exitosamente'
+        );
+    }
+
+    /**
+     * Obtener grupo de precio completo con todas sus relaciones
+     */
+    public function showComplete(int $id): JsonResponse
+    {
+        $data = $this->priceGroupService->getCompletePriceGroup($id);
+
+        return $this->successResponse($data);
+    }
+}

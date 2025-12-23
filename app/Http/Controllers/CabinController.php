@@ -43,7 +43,7 @@ class CabinController extends Controller
         $cabin = $this->cabinService->createCabin($request->validated());
 
         return $this->successResponse(
-            new CabinResource($cabin),
+            $this->transformResource($cabin),
             'Cabaña creada exitosamente',
             201
         );
@@ -56,7 +56,7 @@ class CabinController extends Controller
     {
         $cabin = $this->cabinService->getCabin($id);
 
-        return $this->successResponse(new CabinResource($cabin));
+        return $this->successResponse($this->transformResource($cabin));
     }
 
     /**
@@ -67,7 +67,7 @@ class CabinController extends Controller
         $cabin = $this->cabinService->updateCabin($id, $request->validated());
 
         return $this->successResponse(
-            new CabinResource($cabin),
+            $this->transformResource($cabin),
             'Cabaña actualizada exitosamente'
         );
     }

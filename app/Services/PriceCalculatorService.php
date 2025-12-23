@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\CabinPriceByGuests;
 use App\Models\PriceGroup;
 use App\Models\PriceRange;
 use Carbon\Carbon;
@@ -16,14 +17,21 @@ use Carbon\CarbonPeriod;
  */
 class PriceCalculatorService
 {
+    public function __construct(
+        private readonly PriceRangeService $priceRangeService
+    ) {
+    }
+
     /**
      * Calcula el precio total y el desglose por noche
      *
      * @param  Carbon  $checkIn  Fecha de check-in
      * @param  Carbon  $checkOut  Fecha de check-out
+     * @param  int  $cabinId  ID de la cabaña
+     * @param  int  $numGuests  Cantidad de huéspedes
      * @return array{total: float, deposit: float, balance: float, nights: int, breakdown: array}
      */
-    public function calculatePrice(Carbon $checkIn, Carbon $checkOut): array
+    public function calculatePrice(Carbon $checkIn, Carbon $checkOut, int $cabinId, int $numGuests): array
     {
         $nights = $checkIn->diffInDays($checkOut);
 
@@ -44,7 +52,7 @@ class PriceCalculatorService
         $period = CarbonPeriod::create($checkIn, $checkOut->copy()->subDay());
 
         foreach ($period as $date) {
-            $pricePerNight = $this->getPriceForDate($date);
+            $pricePerNight = $this->getPriceForDate($date, $cabinId, $numGuests);
             $breakdown[] = [
                 'date' => $date->format('Y-m-d'),
                 'price' => $pricePerNight,
@@ -67,29 +75,46 @@ class PriceCalculatorService
 
     /**
      * Obtiene el precio por noche para una fecha específica
+     *
+     * @param  Carbon  $date  Fecha para la cual obtener el precio
+     * @param  int  $cabinId  ID de la cabaña
+     * @param  int  $numGuests  Cantidad de huéspedes
      */
-    public function getPriceForDate(Carbon $date): float
+    public function getPriceForDate(Carbon $date, int $cabinId, int $numGuests): float
     {
-        // Buscar rango de precio que cubra esta fecha
-        $priceRange = $this->getPriceRangeForDate($date);
+        // Buscar precio específico por cabaña y cantidad de huéspedes
+        return $this->getPriceByCabinAndGuests($cabinId, $date, $numGuests);
+    }
 
-        if ($priceRange) {
-            return (float) $priceRange->priceGroup->price_per_night;
+    /**
+     * Obtiene el precio específico de una cabaña para una cantidad de huéspedes en una fecha
+     *
+     * @param  int  $cabinId  ID de la cabaña
+     * @param  Carbon  $date  Fecha para obtener el grupo de precio
+     * @param  int  $numGuests  Cantidad de huéspedes
+     */
+    private function getPriceByCabinAndGuests(int $cabinId, Carbon $date, int $numGuests): float
+    {
+        // Obtener el grupo de precio para esta fecha
+        $priceGroup = $this->getPriceGroupForDate($date);
+
+        if (!$priceGroup) {
+            return 0;
         }
 
-        // Si no hay rango, usar el grupo por defecto
-        $defaultGroup = $this->getDefaultPriceGroup();
+        // Buscar el precio específico para la cabaña, cantidad de huéspedes y grupo de precio
+        $cabinPriceByGuests = CabinPriceByGuests::where('cabin_id', $cabinId)
+            ->where('price_group_id', $priceGroup->id)
+            ->where('num_guests', $numGuests)
+            ->first();
 
-        if ($defaultGroup) {
-            return (float) $defaultGroup->price_per_night;
-        }
-
-        // Sin precio configurado, retornar 0
-        return 0;
+        return $cabinPriceByGuests ? (float) $cabinPriceByGuests->price_per_night : 0;
     }
 
     /**
      * Obtiene el nombre del grupo de precio para una fecha
+     *
+     * @param  Carbon  $date  Fecha para la cual obtener el nombre del grupo
      */
     public function getPriceGroupNameForDate(Carbon $date): ?string
     {
@@ -109,10 +134,21 @@ class PriceCalculatorService
      */
     private function getPriceRangeForDate(Carbon $date): ?PriceRange
     {
-        return PriceRange::whereDate('start_date', '<=', $date)
-            ->whereDate('end_date', '>=', $date)
-            ->with('priceGroup')
-            ->first();
+        return $this->priceRangeService->getPriceRangeForDate($date);
+    }
+
+    /**
+     * Obtiene el grupo de precio para una fecha específica
+     */
+    private function getPriceGroupForDate(Carbon $date): ?PriceGroup
+    {
+        $priceRange = $this->getPriceRangeForDate($date);
+
+        if ($priceRange) {
+            return $priceRange->priceGroup;
+        }
+
+        return $this->getDefaultPriceGroup();
     }
 
     /**
@@ -126,14 +162,18 @@ class PriceCalculatorService
     /**
      * Genera una cotización para una reserva
      *
+     * @param  int  $cabinId  ID de la cabaña
+     * @param  string  $checkIn  Fecha de check-in
+     * @param  string  $checkOut  Fecha de check-out
+     * @param  int  $numGuests  Cantidad de huéspedes
      * @return array{cabin_id: int, check_in: string, check_out: string, total: float, deposit: float, balance: float, nights: int, breakdown: array}
      */
-    public function generateQuote(int $cabinId, string $checkIn, string $checkOut): array
+    public function generateQuote(int $cabinId, string $checkIn, string $checkOut, int $numGuests): array
     {
         $checkInDate = Carbon::parse($checkIn);
         $checkOutDate = Carbon::parse($checkOut);
 
-        $priceDetails = $this->calculatePrice($checkInDate, $checkOutDate);
+        $priceDetails = $this->calculatePrice($checkInDate, $checkOutDate, $cabinId, $numGuests);
 
         return [
             'cabin_id' => $cabinId,
@@ -147,3 +187,4 @@ class PriceCalculatorService
         ];
     }
 }
+
