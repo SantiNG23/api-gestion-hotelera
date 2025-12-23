@@ -32,7 +32,7 @@ class ReservationRequest extends ApiRequest
             'pending_hours' => ['sometimes', 'integer', 'min:1', 'max:72'],
 
             // Cliente (siempre se envía el objeto client)
-            'client' => [$isUpdate ? 'sometimes' : 'required', 'array'],
+            'client' => [$isUpdate || $this->is_blocked ? 'sometimes' : 'required', 'array'],
             'client.name' => ['required_with:client', 'string', 'max:255'],
             'client.dni' => ['required_with:client', 'string', 'max:20'],
             'client.age' => ['nullable', 'integer', 'min:0', 'max:150'],

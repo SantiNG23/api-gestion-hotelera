@@ -72,6 +72,15 @@ class ReservationService extends Service
 
         return DB::transaction(function () use ($data, $priceDetails, $isBlocked) {
             $tenantId = $data['tenant_id'] ?? Auth::user()->tenant_id;
+
+            // Si es un bloqueo, forzar el cliente técnico de bloqueo
+            if ($isBlocked) {
+                $data['client'] = [
+                    'name' => 'BLOQUEO DE FECHAS',
+                    'dni' => Client::DNI_BLOCK,
+                ];
+            }
+
             $client = $this->resolveClient(
                 $tenantId,
                 $data['client'] ?? null
@@ -87,7 +96,7 @@ class ReservationService extends Service
                 'deposit_amount' => $priceDetails['deposit'],
                 'balance_amount' => $priceDetails['balance'],
                 'status' => Reservation::STATUS_PENDING_CONFIRMATION,
-                'pending_until' => now()->addHours((int) ($data['pending_hours'] ?? 48)),
+                'pending_until' => $isBlocked ? null : now()->addHours((int) ($data['pending_hours'] ?? 48)),
                 'notes' => $data['notes'] ?? null,
                 'is_blocked' => $isBlocked,
             ]);
@@ -149,9 +158,17 @@ class ReservationService extends Service
             $data['deposit_amount'] = $priceDetails['deposit'];
             $data['balance_amount'] = $priceDetails['balance'];
             $data['is_blocked'] = $isBlocked;
+
+            // Si es un bloqueo, forzar el cliente técnico de bloqueo
+            if ($isBlocked) {
+                $data['client'] = [
+                    'name' => 'BLOQUEO DE FECHAS',
+                    'dni' => Client::DNI_BLOCK,
+                ];
+            }
         }
 
-        // Resolver cliente si se envía client
+        // Resolver cliente si se envía client (o si lo forzamos arriba por ser bloqueo)
         if (isset($data['client'])) {
             $tenantId = $reservation->tenant_id ?? Auth::user()->tenant_id;
             $client = $this->resolveClient(

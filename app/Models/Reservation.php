@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Traits\BelongsToTenant;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -135,6 +136,10 @@ class Reservation extends Model
      */
     public function blocksAvailability(): bool
     {
+        if ($this->is_blocked) {
+            return true;
+        }
+
         // Pendientes solo bloquean si no han vencido
         if ($this->isPendingConfirmation()) {
             return $this->pending_until === null || $this->pending_until->isFuture();
@@ -198,6 +203,29 @@ class Reservation extends Model
             return 0;
         }
         return (int) $this->check_in_date->diffInDays($this->check_out_date);
+    }
+
+    /**
+     * Scope para reservas que bloquean disponibilidad
+     */
+    public function scopeBlocking(Builder $query): Builder
+    {
+        return $query->where(function ($q) {
+            $q->where('is_blocked', true)
+                ->orWhere(function ($q2) {
+                    $q2->whereIn('status', self::BLOCKING_STATUSES)
+                        ->where(function ($q3) {
+                            $q3->where('status', '!=', self::STATUS_PENDING_CONFIRMATION)
+                                ->orWhere(function ($q4) {
+                                    $q4->where('status', self::STATUS_PENDING_CONFIRMATION)
+                                        ->where(function ($q5) {
+                                            $q5->whereNull('pending_until')
+                                                ->orWhere('pending_until', '>', now());
+                                        });
+                                });
+                        });
+                });
+        });
     }
 
     /**
