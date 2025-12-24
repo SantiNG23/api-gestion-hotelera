@@ -702,4 +702,208 @@ class ReservationServiceTest extends TestCase
         $this->assertEquals('33333333', $reservation->client->dni);
         $this->assertEquals('newclient@example.com', $reservation->client->email);
     }
+
+    // ============= Pruebas de Bloqueos (Blocking) =============
+
+    public function test_create_blocked_reservation_has_zero_price(): void
+    {
+        $data = [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(5)->format('Y-m-d'),
+            'num_guests' => 2,
+            'is_blocked' => true,
+        ];
+
+        $reservation = $this->service->createReservation($data);
+
+        $this->assertTrue($reservation->is_blocked);
+        $this->assertEquals(0, $reservation->total_price);
+        $this->assertEquals(0, $reservation->deposit_amount);
+        $this->assertEquals(0, $reservation->balance_amount);
+    }
+
+    public function test_create_blocked_reservation_uses_block_client(): void
+    {
+        $data = [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+            'num_guests' => 2,
+            'is_blocked' => true,
+        ];
+
+        $reservation = $this->service->createReservation($data);
+
+        $this->assertEquals(Client::DNI_BLOCK, $reservation->client->dni);
+        $this->assertStringContainsString('BLOQUEO', $reservation->client->name);
+    }
+
+    public function test_blocked_reservation_blocks_availability(): void
+    {
+        // Crear bloqueo
+        $blockReservation = $this->service->createReservation([
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+            'num_guests' => 2,
+            'is_blocked' => true,
+        ]);
+
+        // Intentar crear en fechas bloqueadas
+        $data = [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->addDays(1)->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
+            'num_guests' => 2,
+            'client' => [
+                'name' => 'Test User',
+                'dni' => '44444444',
+            ],
+        ];
+
+        $this->expectException(ValidationException::class);
+        $this->service->createReservation($data);
+    }
+
+    public function test_convert_regular_to_blocked_reservation(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'is_blocked' => false,
+            'total_price' => 300,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+        ]);
+
+        // Cambiar a bloqueado
+        $updated = $this->service->updateReservation($reservation->id, [
+            'is_blocked' => true,
+        ]);
+
+        $this->assertTrue($updated->is_blocked);
+        $this->assertEquals(0, $updated->total_price);
+        $this->assertEquals(Client::DNI_BLOCK, $updated->client->dni);
+    }
+
+    public function test_convert_blocked_to_regular_reservation(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'is_blocked' => true,
+            'total_price' => 0,
+            'check_in_date' => Carbon::tomorrow(),
+            'check_out_date' => Carbon::tomorrow()->addDays(3),
+            'num_guests' => 2,
+        ]);
+
+        // Cambiar a reserva normal
+        $updated = $this->service->updateReservation($reservation->id, [
+            'is_blocked' => false,
+            'client' => [
+                'name' => 'Real Client',
+                'dni' => '55555555',
+            ],
+            'num_guests' => 2,
+        ]);
+
+        $this->assertFalse($updated->is_blocked);
+        $this->assertGreaterThan(0, $updated->total_price);
+        $this->assertNotEquals(Client::DNI_BLOCK, $updated->client->dni);
+    }
+
+    public function test_blocked_reservation_can_be_confirmed_with_zero_deposit(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'is_blocked' => true,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'deposit_amount' => 0,
+        ]);
+
+        // Una reserva bloqueada con deposit_amount=0 puede confirmarse
+        $confirmed = $this->service->confirm($reservation->id, []);
+
+        $this->assertEquals(Reservation::STATUS_CONFIRMED, $confirmed->status);
+    }
+
+    public function test_multiple_blocks_same_cabin(): void
+    {
+        // Crear múltiples bloqueos en la misma cabaña
+        $block1 = $this->service->createReservation([
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
+            'num_guests' => 2,
+            'is_blocked' => true,
+        ]);
+
+        $block2 = $this->service->createReservation([
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->addDays(5)->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(7)->format('Y-m-d'),
+            'num_guests' => 2,
+            'is_blocked' => true,
+        ]);
+
+        // Intentar reservar en espacio entre bloqueos (debe funcionar)
+        $reservation = $this->service->createReservation([
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(4)->format('Y-m-d'),
+            'num_guests' => 2,
+            'client' => [
+                'name' => 'Between Blocks',
+                'dni' => '66666666',
+            ],
+        ]);
+
+        $this->assertFalse($reservation->is_blocked);
+        $this->assertGreaterThan(0, $reservation->total_price);
+    }
+
+    public function test_block_with_pending_hours_null(): void
+    {
+        $reservation = $this->service->createReservation([
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+            'num_guests' => 2,
+            'is_blocked' => true,
+        ]);
+
+        // Bloqueos no deben tener pending_until
+        $this->assertNull($reservation->pending_until);
+    }
+
+    public function test_block_doesnt_affect_other_cabins(): void
+    {
+        // Bloquear cabaña principal
+        $this->service->createReservation([
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+            'num_guests' => 2,
+            'is_blocked' => true,
+        ]);
+
+        // La otra cabaña debería estar disponible en las mismas fechas
+        $reservation = $this->service->createReservation([
+            'cabin_id' => $this->otherCabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+            'num_guests' => 2,
+            'client' => [
+                'name' => 'Other Cabin',
+                'dni' => '77777777',
+            ],
+        ]);
+
+        $this->assertFalse($reservation->is_blocked);
+        $this->assertGreaterThan(0, $reservation->total_price);
+    }
 }

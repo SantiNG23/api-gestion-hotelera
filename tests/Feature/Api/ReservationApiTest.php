@@ -548,4 +548,198 @@ class ReservationApiTest extends TestCase
 
         $response->assertStatus(200);
     }
+
+    // ============= Pruebas Exhaustivas de Bloqueos =============
+
+    public function test_create_multiple_blocks_same_cabin(): void
+    {
+        $checkIn1 = Carbon::tomorrow();
+        $checkOut1 = $checkIn1->clone()->addDays(2);
+
+        // Crear primer bloqueo
+        $response1 = $this->postJson('/api/v1/reservations', [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => $checkIn1->format('Y-m-d'),
+            'check_out_date' => $checkOut1->format('Y-m-d'),
+            'num_guests' => 2,
+            'is_blocked' => true,
+        ], $this->authHeaders());
+
+        $response1->assertStatus(201);
+
+        $checkIn2 = Carbon::tomorrow()->addDays(5);
+        $checkOut2 = $checkIn2->clone()->addDays(2);
+
+        // Crear segundo bloqueo
+        $response2 = $this->postJson('/api/v1/reservations', [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => $checkIn2->format('Y-m-d'),
+            'check_out_date' => $checkOut2->format('Y-m-d'),
+            'num_guests' => 2,
+            'is_blocked' => true,
+        ], $this->authHeaders());
+
+        $response2->assertStatus(201);
+
+        // Ambos deben tener precio 0
+        $this->assertEquals(0, $response1->json('data.total_price'));
+        $this->assertEquals(0, $response2->json('data.total_price'));
+    }
+
+    public function test_block_prevents_normal_reservation(): void
+    {
+        $blockCheckIn = Carbon::tomorrow();
+        $blockCheckOut = $blockCheckIn->clone()->addDays(3);
+
+        // Crear bloqueo
+        $this->postJson('/api/v1/reservations', [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => $blockCheckIn->format('Y-m-d'),
+            'check_out_date' => $blockCheckOut->format('Y-m-d'),
+            'num_guests' => 2,
+            'is_blocked' => true,
+        ], $this->authHeaders());
+
+        // Intentar crear en fechas bloqueadas
+        $response = $this->postJson('/api/v1/reservations', [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => $blockCheckIn->addDays(1)->format('Y-m-d'),
+            'check_out_date' => $blockCheckOut->addDays(1)->format('Y-m-d'),
+            'num_guests' => 2,
+            'client' => [
+                'name' => 'Blocked User',
+                'dni' => '88888888',
+            ],
+        ], $this->authHeaders());
+
+        $response->assertStatus(422);
+    }
+
+    public function test_blocks_dont_affect_other_cabins(): void
+    {
+        $checkIn = Carbon::tomorrow();
+        $checkOut = $checkIn->clone()->addDays(3);
+
+        // Bloquear cabaña principal
+        $this->postJson('/api/v1/reservations', [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => $checkIn->format('Y-m-d'),
+            'check_out_date' => $checkOut->format('Y-m-d'),
+            'num_guests' => 2,
+            'is_blocked' => true,
+        ], $this->authHeaders());
+
+        // Cabaña alternativa debería estar disponible
+        $response = $this->postJson('/api/v1/reservations', [
+            'cabin_id' => $this->otherCabin->id,
+            'check_in_date' => $checkIn->format('Y-m-d'),
+            'check_out_date' => $checkOut->format('Y-m-d'),
+            'num_guests' => 2,
+            'client' => [
+                'name' => 'Other Cabin User',
+                'dni' => '99999999',
+            ],
+        ], $this->authHeaders());
+
+        $response->assertStatus(201);
+        $this->assertFalse($response->json('data.is_blocked'));
+        $this->assertGreaterThan(0, $response->json('data.total_price'));
+    }
+
+    public function test_convert_reservation_to_block(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'is_blocked' => false,
+            'total_price' => 300,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+        ]);
+
+        // Convertir a bloqueo
+        $response = $this->putJson("/api/v1/reservations/{$reservation->id}", [
+            'is_blocked' => true,
+        ], $this->authHeaders());
+
+        $response->assertStatus(200);
+        $this->assertTrue($response->json('data.is_blocked'));
+        $this->assertEquals(0, $response->json('data.total_price'));
+        $this->assertEquals(Client::DNI_BLOCK, $response->json('data.client.dni'));
+    }
+
+    public function test_convert_block_to_normal_reservation(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'is_blocked' => true,
+            'total_price' => 0,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'check_in_date' => Carbon::tomorrow(),
+            'check_out_date' => Carbon::tomorrow()->addDays(3),
+            'num_guests' => 2,
+        ]);
+
+        // Convertir a reserva normal
+        $response = $this->putJson("/api/v1/reservations/{$reservation->id}", [
+            'is_blocked' => false,
+            'client' => [
+                'name' => 'Real Reservation',
+                'dni' => '11111112',
+            ],
+            'num_guests' => 2,
+        ], $this->authHeaders());
+
+        $response->assertStatus(200);
+        $this->assertFalse($response->json('data.is_blocked'));
+        $this->assertGreaterThan(0, $response->json('data.total_price'));
+        $this->assertNotEquals(Client::DNI_BLOCK, $response->json('data.client.dni'));
+    }
+
+    public function test_block_has_no_pending_hours(): void
+    {
+        $response = $this->postJson('/api/v1/reservations', [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+            'num_guests' => 2,
+            'is_blocked' => true,
+        ], $this->authHeaders());
+
+        $response->assertStatus(201);
+        $this->assertNull($response->json('data.pending_until'));
+    }
+
+    public function test_block_uses_special_client(): void
+    {
+        $response = $this->postJson('/api/v1/reservations', [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+            'num_guests' => 2,
+            'is_blocked' => true,
+        ], $this->authHeaders());
+
+        $response->assertStatus(201);
+        $this->assertEquals(Client::DNI_BLOCK, $response->json('data.client.dni'));
+        $this->assertStringContainsString('BLOQUEO', $response->json('data.client.name'));
+    }
+
+    public function test_blocked_reservation_can_be_confirmed_with_zero_payment(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'is_blocked' => true,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'deposit_amount' => 0,
+        ]);
+
+        $response = $this->postJson("/api/v1/reservations/{$reservation->id}/confirm", [], $this->authHeaders());
+
+        // Una reserva bloqueada con deposit_amount=0 puede confirmarse (pago de 0)
+        $response->assertStatus(200);
+        $this->assertEquals(Reservation::STATUS_CONFIRMED, $response->json('data.status'));
+    }
 }
