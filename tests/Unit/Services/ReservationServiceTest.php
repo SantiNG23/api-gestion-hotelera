@@ -1,0 +1,705 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Unit\Services;
+
+use App\Events\ReservationCreated;
+use App\Models\Cabin;
+use App\Models\CabinPriceByGuests;
+use App\Models\Client;
+use App\Models\PriceGroup;
+use App\Models\Reservation;
+use App\Models\ReservationPayment;
+use App\Services\ReservationService;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Validation\ValidationException;
+use Tests\TestCase;
+
+class ReservationServiceTest extends TestCase
+{
+    private ReservationService $service;
+    protected ?Cabin $cabin = null;
+    protected ?Cabin $otherCabin = null;
+    protected ?Client $client = null;
+    protected ?PriceGroup $priceGroup = null;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $auth = $this->createAuthenticatedUser();
+        $this->actingAs($auth['user']);
+
+        // Crear cabaña principal
+        $this->cabin = Cabin::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'capacity' => 4,
+        ]);
+
+        // Crear cabaña alternativa
+        $this->otherCabin = Cabin::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'capacity' => 2,
+        ]);
+
+        // Crear grupo de precio por defecto
+        $this->priceGroup = PriceGroup::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'price_per_night' => 100,
+            'is_default' => true,
+        ]);
+
+        // Configurar precios por huéspedes
+        foreach ([2, 3, 4] as $guests) {
+            CabinPriceByGuests::factory()->create([
+                'tenant_id' => $this->tenant->id,
+                'cabin_id' => $this->cabin->id,
+                'price_group_id' => $this->priceGroup->id,
+                'num_guests' => $guests,
+                'price_per_night' => 100,
+            ]);
+        }
+
+        // Precios para cabaña alternativa
+        CabinPriceByGuests::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->otherCabin->id,
+            'price_group_id' => $this->priceGroup->id,
+            'num_guests' => 2,
+            'price_per_night' => 80,
+        ]);
+
+        CabinPriceByGuests::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->otherCabin->id,
+            'price_group_id' => $this->priceGroup->id,
+            'num_guests' => 3,
+            'price_per_night' => 80,
+        ]);
+
+        CabinPriceByGuests::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->otherCabin->id,
+            'price_group_id' => $this->priceGroup->id,
+            'num_guests' => 4,
+            'price_per_night' => 80,
+        ]);
+
+        // Crear cliente de prueba
+        $this->client = Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'John Doe',
+            'dni' => '12345678',
+        ]);
+
+        $this->service = app(ReservationService::class);
+    }
+
+    // ============= getReservations() - 3 tests =============
+
+    public function test_get_reservations_returns_paginated_list(): void
+    {
+        // Crear 3 reservas
+        $reservations = Reservation::factory()->count(3)->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+        ]);
+
+        $result = $this->service->getReservations([
+            'page' => 1,
+            'per_page' => 10,
+            'sort_by' => 'id',
+            'sort_order' => 'asc',
+            'filters' => [],
+            'date_range' => ['start' => null, 'end' => null],
+        ]);
+
+        $this->assertCount(3, $result->items());
+        $this->assertEquals(1, $result->currentPage());
+        $this->assertEquals(10, $result->perPage());
+    }
+
+    public function test_get_reservations_filters_by_status(): void
+    {
+        // Crear reservas con diferentes estados (asegurar mismo tenant)
+        Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'status' => Reservation::STATUS_CONFIRMED,
+        ]);
+
+        Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+        ]);
+
+        $result = $this->service->getReservations([
+            'page' => 1,
+            'per_page' => 10,
+            'sort_by' => 'id',
+            'sort_order' => 'asc',
+            'filters' => ['status' => Reservation::STATUS_CONFIRMED],
+            'date_range' => ['start' => null, 'end' => null],
+        ]);
+
+        $this->assertCount(1, $result->items());
+        $this->assertEquals(Reservation::STATUS_CONFIRMED, $result->items()[0]->status);
+    }
+
+    public function test_get_reservations_filters_by_date_range(): void
+    {
+        // Crear reservas en diferentes fechas
+        $checkInDate = Carbon::now()->addDays(5);
+        $checkOutDate = $checkInDate->clone()->addDays(3);
+
+        Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'check_in_date' => $checkInDate,
+            'check_out_date' => $checkOutDate,
+        ]);
+
+        // Reserva fuera del rango
+        Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'check_in_date' => Carbon::now()->addMonths(2),
+            'check_out_date' => Carbon::now()->addMonths(2)->addDays(3),
+        ]);
+
+        $result = $this->service->getReservations([
+            'page' => 1,
+            'per_page' => 10,
+            'sort_by' => 'id',
+            'sort_order' => 'asc',
+            'filters' => [],
+            'date_range' => [
+                'start' => $checkInDate->format('Y-m-d'),
+                'end' => $checkInDate->addDays(2)->format('Y-m-d'),
+            ],
+        ]);
+
+        $this->assertCount(1, $result->items());
+    }
+
+    // ============= getReservation() - 1 test =============
+
+    public function test_get_reservation_with_relations(): void
+    {
+        // Crear reserva con relaciones
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+        ]);
+
+        ReservationPayment::factory()->create([
+            'reservation_id' => $reservation->id,
+            'amount' => $reservation->deposit_amount,
+            'payment_type' => ReservationPayment::TYPE_DEPOSIT,
+        ]);
+
+        $result = $this->service->getReservation($reservation->id);
+
+        $this->assertEquals($reservation->id, $result->id);
+        $this->assertNotNull($result->client);
+        $this->assertNotNull($result->cabin);
+        $this->assertCount(1, $result->payments);
+    }
+
+    // ============= createReservation() - 7 tests =============
+
+    public function test_create_reservation_basic(): void
+    {
+        Event::fake();
+
+        $data = [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+            'num_guests' => 2,
+            'client' => [
+                'name' => 'Jane Doe',
+                'dni' => '87654321',
+            ],
+        ];
+
+        $reservation = $this->service->createReservation($data);
+
+        $this->assertEquals(Reservation::STATUS_PENDING_CONFIRMATION, $reservation->status);
+        $this->assertEquals(300, $reservation->total_price); // 3 noches x 100
+        $this->assertEquals(150, $reservation->deposit_amount); // 50%
+        $this->assertEquals(150, $reservation->balance_amount); // 50%
+        $this->assertFalse($reservation->is_blocked);
+        Event::assertDispatched(ReservationCreated::class);
+    }
+
+    public function test_create_reservation_with_guests(): void
+    {
+        $data = [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
+            'num_guests' => 3,
+            'client' => [
+                'name' => 'John Smith',
+                'dni' => '11111111',
+            ],
+            'guests' => [
+                ['name' => 'Guest 1', 'dni' => 'G1', 'age' => 30],
+                ['name' => 'Guest 2', 'dni' => 'G2', 'age' => 28],
+            ],
+        ];
+
+        $reservation = $this->service->createReservation($data);
+
+        $this->assertCount(2, $reservation->guests);
+        $this->assertEquals('Guest 1', $reservation->guests[0]->name);
+    }
+
+    public function test_create_reservation_blocked(): void
+    {
+        $data = [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+            'is_blocked' => true,
+            'client' => [
+                'name' => 'BLOQUEO DE FECHAS',
+                'dni' => Client::DNI_BLOCK,
+            ],
+        ];
+
+        $reservation = $this->service->createReservation($data);
+
+        $this->assertEquals(0, $reservation->total_price);
+        $this->assertEquals(0, $reservation->deposit_amount);
+        $this->assertEquals(0, $reservation->balance_amount);
+        $this->assertTrue($reservation->is_blocked);
+        $this->assertEquals(Client::DNI_BLOCK, $reservation->client->dni);
+    }
+
+    public function test_create_reservation_recalculates_price(): void
+    {
+        $checkIn = Carbon::tomorrow();
+        $checkOut = $checkIn->clone()->addDays(5);
+
+        $data = [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => $checkIn->format('Y-m-d'),
+            'check_out_date' => $checkOut->format('Y-m-d'),
+            'num_guests' => 2,
+            'client' => [
+                'name' => 'Test User',
+                'dni' => '99999999',
+            ],
+        ];
+
+        $reservation = $this->service->createReservation($data);
+
+        // 5 noches x 100 = 500
+        $this->assertEquals(500, $reservation->total_price);
+        $this->assertEquals(250, $reservation->deposit_amount);
+        $this->assertEquals(250, $reservation->balance_amount);
+    }
+
+    public function test_create_reservation_validates_availability(): void
+    {
+        // Crear una reserva bloqueante
+        Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'check_in_date' => Carbon::tomorrow(),
+            'check_out_date' => Carbon::tomorrow()->addDays(3),
+            'status' => Reservation::STATUS_CONFIRMED,
+        ]);
+
+        // Intentar crear reserva en fechas ocupadas
+        $data = [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->addDays(1)->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(4)->format('Y-m-d'),
+            'num_guests' => 2,
+            'client' => [
+                'name' => 'Overlapping',
+                'dni' => '55555555',
+            ],
+        ];
+
+        $this->expectException(ValidationException::class);
+        $this->service->createReservation($data);
+    }
+
+    public function test_create_reservation_dispatches_event(): void
+    {
+        Event::fake();
+
+        $data = [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
+            'num_guests' => 2,
+            'client' => [
+                'name' => 'Event Test',
+                'dni' => '77777777',
+            ],
+        ];
+
+        $this->service->createReservation($data);
+
+        Event::assertDispatched(ReservationCreated::class);
+    }
+
+    public function test_create_reservation_without_required_dni(): void
+    {
+        $data = [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
+            'num_guests' => 2,
+            'client' => [
+                'name' => 'No DNI',
+                // Falta el DNI
+            ],
+        ];
+
+        $this->expectException(ValidationException::class);
+        $this->service->createReservation($data);
+    }
+
+    // ============= updateReservation() - 5 tests =============
+
+    public function test_update_reservation_notes(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'total_price' => 300,
+        ]);
+
+        $originalPrice = $reservation->total_price;
+
+        $updated = $this->service->updateReservation($reservation->id, [
+            'notes' => 'Updated notes',
+        ]);
+
+        $this->assertEquals('Updated notes', $updated->notes);
+        $this->assertEquals($originalPrice, $updated->total_price);
+    }
+
+    public function test_update_reservation_dates_recalculates_price(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'check_in_date' => Carbon::tomorrow(),
+            'check_out_date' => Carbon::tomorrow()->addDays(3),
+            'num_guests' => 2,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+        ]);
+
+        $newCheckIn = Carbon::tomorrow()->addDays(10);
+        $newCheckOut = $newCheckIn->clone()->addDays(4); // 4 noches
+
+        $updated = $this->service->updateReservation($reservation->id, [
+            'check_in_date' => $newCheckIn->format('Y-m-d'),
+            'check_out_date' => $newCheckOut->format('Y-m-d'),
+        ]);
+
+        // 4 noches x 100 = 400
+        $this->assertEquals(400, $updated->total_price);
+        $this->assertEquals($newCheckIn->format('Y-m-d'), $updated->check_in_date->format('Y-m-d'));
+    }
+
+    public function test_update_reservation_cabin_recalculates_price(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'check_in_date' => Carbon::tomorrow(),
+            'check_out_date' => Carbon::tomorrow()->addDays(3),
+            'num_guests' => 2,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+        ]);
+
+        $updated = $this->service->updateReservation($reservation->id, [
+            'cabin_id' => $this->otherCabin->id,
+        ]);
+
+        // Cambio de cabaña, precio diferente (3 noches x 80 = 240)
+        $this->assertEquals($this->otherCabin->id, $updated->cabin_id);
+        $this->assertEquals(240, $updated->total_price);
+    }
+
+    public function test_update_reservation_cannot_modify_finished(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'status' => Reservation::STATUS_FINISHED,
+        ]);
+
+        $this->expectException(ValidationException::class);
+        $this->service->updateReservation($reservation->id, [
+            'notes' => 'Should fail',
+        ]);
+    }
+
+    public function test_update_reservation_cannot_modify_cancelled(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'status' => Reservation::STATUS_CANCELLED,
+        ]);
+
+        $this->expectException(ValidationException::class);
+        $this->service->updateReservation($reservation->id, [
+            'notes' => 'Should fail',
+        ]);
+    }
+
+    // ============= confirm() - 3 tests =============
+
+    public function test_confirm_reservation_creates_payment(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'deposit_amount' => 150,
+        ]);
+
+        $confirmed = $this->service->confirm($reservation->id, [
+            'payment_method' => 'credit_card',
+        ]);
+
+        $this->assertEquals(Reservation::STATUS_CONFIRMED, $confirmed->status);
+        $this->assertNull($confirmed->pending_until);
+        $this->assertCount(1, $confirmed->payments);
+        $this->assertEquals(150, $confirmed->payments[0]->amount);
+        $this->assertEquals(ReservationPayment::TYPE_DEPOSIT, $confirmed->payments[0]->payment_type);
+    }
+
+    public function test_confirm_reservation_only_pending(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'status' => Reservation::STATUS_CONFIRMED,
+        ]);
+
+        $this->expectException(ValidationException::class);
+        $this->service->confirm($reservation->id, []);
+    }
+
+    public function test_confirm_reservation_cannot_pay_deposit_twice(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'deposit_amount' => 150,
+        ]);
+
+        // Primera confirmación
+        $this->service->confirm($reservation->id, []);
+
+        // Intenta confirmar nuevamente
+        $reservation->refresh();
+        $this->expectException(ValidationException::class);
+        $this->service->confirm($reservation->id, []);
+    }
+
+    // ============= payBalance() - 2 tests =============
+
+    public function test_pay_balance_creates_payment(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'status' => Reservation::STATUS_CONFIRMED,
+            'balance_amount' => 150,
+        ]);
+
+        $updated = $this->service->payBalance($reservation->id, [
+            'payment_method' => 'bank_transfer',
+        ]);
+
+        $this->assertEquals(Reservation::STATUS_CONFIRMED, $updated->status);
+        $this->assertCount(1, $updated->payments);
+        $this->assertEquals(150, $updated->payments[0]->amount);
+        $this->assertEquals(ReservationPayment::TYPE_BALANCE, $updated->payments[0]->payment_type);
+    }
+
+    public function test_pay_balance_only_confirmed(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+        ]);
+
+        $this->expectException(ValidationException::class);
+        $this->service->payBalance($reservation->id, []);
+    }
+
+    // ============= checkIn() - 2 tests =============
+
+    public function test_check_in_with_balance_already_paid(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'status' => Reservation::STATUS_CONFIRMED,
+            'balance_amount' => 150,
+        ]);
+
+        // Balance ya pagado
+        ReservationPayment::create([
+            'reservation_id' => $reservation->id,
+            'amount' => 150,
+            'payment_type' => ReservationPayment::TYPE_BALANCE,
+            'paid_at' => now(),
+        ]);
+
+        $checkedIn = $this->service->checkIn($reservation->id, []);
+
+        $this->assertEquals(Reservation::STATUS_CHECKED_IN, $checkedIn->status);
+        $this->assertCount(1, $checkedIn->payments);
+    }
+
+    public function test_check_in_pays_balance_on_arrival(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'status' => Reservation::STATUS_CONFIRMED,
+            'balance_amount' => 150,
+        ]);
+
+        $checkedIn = $this->service->checkIn($reservation->id, [
+            'payment_method' => 'cash',
+        ]);
+
+        $this->assertEquals(Reservation::STATUS_CHECKED_IN, $checkedIn->status);
+        $this->assertCount(1, $checkedIn->payments);
+        $this->assertEquals(ReservationPayment::TYPE_BALANCE, $checkedIn->payments[0]->payment_type);
+    }
+
+    // ============= checkOut() - 1 test =============
+
+    public function test_check_out_finalizes_reservation(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'status' => Reservation::STATUS_CHECKED_IN,
+        ]);
+
+        $finished = $this->service->checkOut($reservation->id);
+
+        $this->assertEquals(Reservation::STATUS_FINISHED, $finished->status);
+    }
+
+    // ============= cancel() - 2 tests =============
+
+    public function test_cancel_reservation(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+        ]);
+
+        $cancelled = $this->service->cancel($reservation->id);
+
+        $this->assertEquals(Reservation::STATUS_CANCELLED, $cancelled->status);
+        $this->assertNull($cancelled->pending_until);
+    }
+
+    public function test_cancel_cannot_cancel_finished(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'status' => Reservation::STATUS_FINISHED,
+        ]);
+
+        $this->expectException(ValidationException::class);
+        $this->service->cancel($reservation->id);
+    }
+
+    // ============= resolveClient() - 2 tests =============
+
+    public function test_resolve_client_existing(): void
+    {
+        $existingClient = Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Old Name',
+            'dni' => '12121212',
+        ]);
+
+        $data = [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
+            'num_guests' => 2,
+            'client' => [
+                'name' => 'Updated Name',
+                'dni' => '12121212',
+                'email' => 'new@example.com',
+            ],
+        ];
+
+        $reservation = $this->service->createReservation($data);
+
+        $this->assertEquals($existingClient->id, $reservation->client_id);
+        $this->assertEquals('Updated Name', $reservation->client->name);
+        $this->assertEquals('new@example.com', $reservation->client->email);
+    }
+
+    public function test_resolve_client_creates_new(): void
+    {
+        $data = [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
+            'num_guests' => 2,
+            'client' => [
+                'name' => 'New Client',
+                'dni' => '33333333',
+                'email' => 'newclient@example.com',
+            ],
+        ];
+
+        $reservation = $this->service->createReservation($data);
+
+        $this->assertEquals('New Client', $reservation->client->name);
+        $this->assertEquals('33333333', $reservation->client->dni);
+        $this->assertEquals('newclient@example.com', $reservation->client->email);
+    }
+}
