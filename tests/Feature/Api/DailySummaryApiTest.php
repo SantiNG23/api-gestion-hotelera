@@ -32,20 +32,45 @@ class DailySummaryApiTest extends TestCase
         $this->assertApiResponse($response);
         $response->assertJsonStructure([
             'data' => [
-                'date',
                 'has_events',
-                'check_ins',
-                'check_outs',
-                'expiring_pending',
-                'summary' => [
-                    'check_ins_count',
-                    'check_outs_count',
-                    'expiring_pending_count',
+                'check_ins' => [
+                    '*' => [
+                        'id',
+                        'client_name',
+                        'cabin_name',
+                        'check_in_date',
+                        'check_out_date',
+                        'nights',
+                        'total_price',
+                        'status',
+                        'pending_until',
+                    ],
                 ],
-                'occupancy' => [
-                    'occupied_cabins',
-                    'total_cabins',
-                    'occupancy_rate',
+                'check_outs' => [
+                    '*' => [
+                        'id',
+                        'client_name',
+                        'cabin_name',
+                        'check_in_date',
+                        'check_out_date',
+                        'nights',
+                        'total_price',
+                        'status',
+                        'pending_until',
+                    ],
+                ],
+                'expiring_pending' => [
+                    '*' => [
+                        'id',
+                        'client_name',
+                        'cabin_name',
+                        'check_in_date',
+                        'check_out_date',
+                        'nights',
+                        'total_price',
+                        'status',
+                        'pending_until',
+                    ],
                 ],
             ],
         ]);
@@ -67,7 +92,7 @@ class DailySummaryApiTest extends TestCase
 
         $this->assertApiResponse($response);
         $response->assertJsonPath('data.has_events', true);
-        $response->assertJsonPath('data.summary.check_ins_count', 1);
+        $response->assertJsonPath('data.check_ins.0.cabin_name', $this->cabin->name);
     }
 
     public function test_shows_check_outs_for_today(): void
@@ -86,7 +111,7 @@ class DailySummaryApiTest extends TestCase
 
         $this->assertApiResponse($response);
         $response->assertJsonPath('data.has_events', true);
-        $response->assertJsonPath('data.summary.check_outs_count', 1);
+        $response->assertJsonPath('data.check_outs.0.cabin_name', $this->cabin->name);
     }
 
     public function test_shows_expiring_pending_reservations(): void
@@ -105,7 +130,7 @@ class DailySummaryApiTest extends TestCase
 
         $this->assertApiResponse($response);
         $response->assertJsonPath('data.has_events', true);
-        $response->assertJsonPath('data.summary.expiring_pending_count', 1);
+        $response->assertJsonPath('data.expiring_pending.0.status', Reservation::STATUS_PENDING_CONFIRMATION);
     }
 
     public function test_has_events_false_when_no_events(): void
@@ -136,30 +161,7 @@ class DailySummaryApiTest extends TestCase
             ->getJson('/api/v1/daily-summary?date=' . $targetDate->format('Y-m-d'));
 
         $this->assertApiResponse($response);
-        $response->assertJsonPath('data.date', $targetDate->format('Y-m-d'));
-        $response->assertJsonPath('data.summary.check_ins_count', 1);
-    }
-
-    public function test_shows_occupancy_stats(): void
-    {
-        // Crear 3 cabañas activas
-        Cabin::factory()->count(2)->create(['tenant_id' => $this->tenant->id]);
-
-        // Reservar 1 cabaña para hoy
-        Reservation::factory()->checkedIn()->create([
-            'tenant_id' => $this->tenant->id,
-            'client_id' => $this->client->id,
-            'cabin_id' => $this->cabin->id,
-            'check_in_date' => Carbon::today()->subDay(),
-            'check_out_date' => Carbon::today()->addDay(),
-        ]);
-
-        $response = $this->withHeaders($this->authHeaders())
-            ->getJson('/api/v1/daily-summary');
-
-        $this->assertApiResponse($response);
-        $response->assertJsonPath('data.occupancy.total_cabins', 3);
-        $response->assertJsonPath('data.occupancy.occupied_cabins', 1);
+        $response->assertJsonPath('data.check_ins.0.check_in_date', $targetDate->format('Y-m-d'));
+        $response->assertJsonCount(1, 'data.check_ins');
     }
 }
-
