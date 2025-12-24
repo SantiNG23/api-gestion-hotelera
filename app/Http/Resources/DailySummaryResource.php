@@ -21,9 +21,9 @@ class DailySummaryResource extends ApiResource
         return [
             'date' => $this->resource['date'],
             'has_events' => $this->resource['has_events'],
-            'check_ins' => ReservationResource::collection($this->resource['check_ins']),
-            'check_outs' => ReservationResource::collection($this->resource['check_outs']),
-            'expiring_pending' => ReservationResource::collection($this->resource['expiring_pending']),
+            'check_ins' => DailySummaryReservationResource::collection($this->resource['check_ins']),
+            'check_outs' => DailySummaryReservationResource::collection($this->resource['check_outs']),
+            'expiring_pending' => DailySummaryReservationResource::collection($this->resource['expiring_pending']),
             'summary' => $this->resource['summary'],
             'occupancy' => $this->resource['occupancy'],
         ];

@@ -55,9 +55,7 @@ class DailySummaryService
     public function getCheckInsForDate(Carbon $date): Collection
     {
         return Reservation::whereDate('check_in_date', $date)
-            ->whereIn('status', [
-                Reservation::STATUS_CONFIRMED,
-            ])
+            ->where('status', Reservation::STATUS_CONFIRMED)
             ->with(['client', 'cabin', 'guests'])
             ->orderBy('cabin_id')
             ->get();
@@ -80,17 +78,29 @@ class DailySummaryService
     }
 
     /**
-     * Obtiene las reservas pendientes que vencen en una fecha
+     * Obtiene las reservas con pagos pendientes o expiraciones para hoy
      *
      * @return Collection<Reservation>
      */
     public function getExpiringPendingReservations(Carbon $date): Collection
     {
-        return Reservation::where('status', Reservation::STATUS_PENDING_CONFIRMATION)
-            ->whereNotNull('pending_until')
-            ->whereDate('pending_until', $date)
-            ->with(['client', 'cabin'])
+        return Reservation::where(function ($query) use ($date) {
+            // Caso 1: Reservas pendientes de confirmación que vencen hoy (falta seña)
+            $query->where('status', Reservation::STATUS_PENDING_CONFIRMATION)
+                ->whereNotNull('pending_until')
+                ->whereDate('pending_until', $date);
+        })
+            ->orWhere(function ($query) use ($date) {
+                // Caso 2: Reservas de hoy que aún no han saldado el pago (falta el saldo/balance)
+                $query->whereDate('check_in_date', $date)
+                    ->whereIn('status', [Reservation::STATUS_CONFIRMED, Reservation::STATUS_CHECKED_IN])
+                    ->whereDoesntHave('payments', function ($q) {
+                        $q->where('payment_type', 'balance');
+                    });
+            })
+            ->with(['client', 'cabin', 'payments'])
             ->orderBy('pending_until')
+            ->orderBy('check_in_date')
             ->get();
     }
 
@@ -123,4 +133,3 @@ class DailySummaryService
         ];
     }
 }
-
