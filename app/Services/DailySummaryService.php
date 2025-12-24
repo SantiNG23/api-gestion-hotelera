@@ -34,16 +34,10 @@ class DailySummaryService
             || $expiringPending->isNotEmpty();
 
         return [
-            'date' => $date->format('Y-m-d'),
             'has_events' => $hasEvents,
             'check_ins' => $checkIns,
             'check_outs' => $checkOuts,
             'expiring_pending' => $expiringPending,
-            'summary' => [
-                'check_ins_count' => $checkIns->count(),
-                'check_outs_count' => $checkOuts->count(),
-                'expiring_pending_count' => $expiringPending->count(),
-            ],
         ];
     }
 
@@ -102,34 +96,5 @@ class DailySummaryService
             ->orderBy('pending_until')
             ->orderBy('check_in_date')
             ->get();
-    }
-
-    /**
-     * Obtiene estadísticas de ocupación para el día
-     *
-     * @return array{occupied_cabins: int, total_cabins: int, occupancy_rate: float}
-     */
-    public function getOccupancyStats(Carbon $date): array
-    {
-        $totalCabins = \App\Models\Cabin::where('is_active', true)->count();
-
-        $occupiedCabins = Reservation::whereDate('check_in_date', '<=', $date)
-            ->whereDate('check_out_date', '>', $date)
-            ->whereIn('status', [
-                Reservation::STATUS_CONFIRMED,
-                Reservation::STATUS_CHECKED_IN,
-            ])
-            ->distinct('cabin_id')
-            ->count('cabin_id');
-
-        $occupancyRate = $totalCabins > 0
-            ? round(($occupiedCabins / $totalCabins) * 100, 2)
-            : 0;
-
-        return [
-            'occupied_cabins' => $occupiedCabins,
-            'total_cabins' => $totalCabins,
-            'occupancy_rate' => $occupancyRate,
-        ];
     }
 }

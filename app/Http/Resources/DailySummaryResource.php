@@ -19,13 +19,10 @@ class DailySummaryResource extends ApiResource
     {
         // $this->resource es el array de datos devuelto por el servicio
         return [
-            'date' => $this->resource['date'],
             'has_events' => $this->resource['has_events'],
             'check_ins' => DailySummaryReservationResource::collection($this->resource['check_ins']),
             'check_outs' => DailySummaryReservationResource::collection($this->resource['check_outs']),
             'expiring_pending' => DailySummaryReservationResource::collection($this->resource['expiring_pending']),
-            'summary' => $this->resource['summary'],
-            'occupancy' => $this->resource['occupancy'],
         ];
     }
 }
