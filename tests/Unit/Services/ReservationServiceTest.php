@@ -906,4 +906,293 @@ class ReservationServiceTest extends TestCase
         $this->assertFalse($reservation->is_blocked);
         $this->assertGreaterThan(0, $reservation->total_price);
     }
+
+    // ============= autoCalcellExpiredPending() - Cancelación automática de reservas expiradas =============
+
+    public function test_reservation_pending_status_expires_automatically(): void
+    {
+        // Crear una reserva con pending_until en el pasado
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'pending_until' => now()->subHours(1), // Vencida hace 1 hora
+        ]);
+
+        // Verificar que está marcada como expirada
+        $this->assertTrue($reservation->fresh()->isPendingExpired());
+    }
+
+    public function test_auto_cancel_single_expired_pending_reservation(): void
+    {
+        // Crear una reserva con pending_until en el pasado
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'pending_until' => now()->subHours(1), // Vencida hace 1 hora
+        ]);
+
+        // Ejecutar cancelación automática
+        $result = $this->service->autoCalcellExpiredPending();
+
+        // Verificar que se canceló correctamente
+        $this->assertEquals(1, $result['cancelled']);
+        $this->assertEquals(0, $result['failed']);
+
+        // Verificar que la reserva ahora está cancelada
+        $reservation->refresh();
+        $this->assertTrue($reservation->isCancelled());
+        $this->assertNull($reservation->pending_until);
+    }
+
+    public function test_auto_cancel_multiple_expired_pending_reservations(): void
+    {
+        // Crear tres reservas con pending_until expirado
+        $reservation1 = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'pending_until' => now()->subHours(2),
+        ]);
+
+        $reservation2 = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->otherCabin->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'pending_until' => now()->subHours(1),
+        ]);
+
+        $reservation3 = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'pending_until' => now()->subMinutes(30),
+        ]);
+
+        // Ejecutar cancelación automática
+        $result = $this->service->autoCalcellExpiredPending();
+
+        // Verificar que se cancelaron todas
+        $this->assertEquals(3, $result['cancelled']);
+        $this->assertEquals(0, $result['failed']);
+
+        // Verificar que todas las reservas están canceladas
+        foreach ([$reservation1, $reservation2, $reservation3] as $reservation) {
+            $reservation->refresh();
+            $this->assertTrue($reservation->isCancelled());
+        }
+    }
+
+    public function test_auto_cancel_ignores_non_expired_pending_reservations(): void
+    {
+        // Crear una reserva expirada
+        $expiredReservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'pending_until' => now()->subHours(1),
+        ]);
+
+        // Crear una reserva pendiente que AÚN no expira
+        $validReservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->otherCabin->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'pending_until' => now()->addHours(48), // Vence en 48 horas
+        ]);
+
+        // Ejecutar cancelación automática
+        $result = $this->service->autoCalcellExpiredPending();
+
+        // Verificar que solo se canceló la expirada
+        $this->assertEquals(1, $result['cancelled']);
+        $this->assertEquals(0, $result['failed']);
+
+        // Verificar que la expirada está cancelada
+        $expiredReservation->refresh();
+        $this->assertTrue($expiredReservation->isCancelled());
+
+        // Verificar que la válida sigue pendiente
+        $validReservation->refresh();
+        $this->assertTrue($validReservation->isPendingConfirmation());
+    }
+
+    public function test_auto_cancel_ignores_confirmed_reservations(): void
+    {
+        // Crear una reserva confirmada (sin pending_until o con fecha pasada)
+        $confirmedReservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'status' => Reservation::STATUS_CONFIRMED,
+            'pending_until' => null,
+        ]);
+
+        // Ejecutar cancelación automática
+        $result = $this->service->autoCalcellExpiredPending();
+
+        // Verificar que no se canceló nada
+        $this->assertEquals(0, $result['cancelled']);
+        $this->assertEquals(0, $result['failed']);
+
+        // Verificar que la reserva sigue confirmada
+        $confirmedReservation->refresh();
+        $this->assertTrue($confirmedReservation->isConfirmed());
+    }
+
+    public function test_auto_cancel_ignores_reservations_without_pending_until(): void
+    {
+        // Crear una reserva pendiente sin pending_until (debería seguir pendiente indefinidamente)
+        $pendingReservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'pending_until' => null,
+        ]);
+
+        // Ejecutar cancelación automática
+        $result = $this->service->autoCalcellExpiredPending();
+
+        // Verificar que no se canceló nada
+        $this->assertEquals(0, $result['cancelled']);
+        $this->assertEquals(0, $result['failed']);
+
+        // Verificar que la reserva sigue pendiente
+        $pendingReservation->refresh();
+        $this->assertTrue($pendingReservation->isPendingConfirmation());
+    }
+
+    public function test_expired_pending_reservation_does_not_block_availability(): void
+    {
+        // Crear una reserva expirada
+        $expiredReservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'pending_until' => now()->subHours(1),
+            'check_in_date' => Carbon::tomorrow(),
+            'check_out_date' => Carbon::tomorrow()->addDays(3),
+        ]);
+
+        // Verificar que está expirada
+        $this->assertTrue($expiredReservation->isPendingExpired());
+
+        // Verificar que NO bloquea disponibilidad una vez expirada
+        $this->assertFalse($expiredReservation->fresh()->blocksAvailability());
+
+        // Debería poderse hacer una nueva reserva en esas fechas
+        $newReservation = $this->service->createReservation([
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+            'num_guests' => 2,
+            'client' => [
+                'name' => 'New Booking',
+                'dni' => '99999999',
+            ],
+        ]);
+
+        $this->assertNotNull($newReservation->id);
+        $this->assertTrue($newReservation->isPendingConfirmation());
+    }
+
+    public function test_non_expired_pending_reservation_still_blocks_availability(): void
+    {
+        // Crear una reserva pendiente VÁLIDA (no expirada)
+        $validReservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'pending_until' => now()->addHours(48),
+            'check_in_date' => Carbon::tomorrow(),
+            'check_out_date' => Carbon::tomorrow()->addDays(3),
+        ]);
+
+        // Verificar que NO está expirada
+        $this->assertFalse($validReservation->isPendingExpired());
+
+        // Verificar que SÍ bloquea disponibilidad
+        $this->assertTrue($validReservation->fresh()->blocksAvailability());
+
+        // NO debería poderse hacer una nueva reserva en esas fechas
+        $this->expectException(ValidationException::class);
+
+        $this->service->createReservation([
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+            'num_guests' => 2,
+            'client' => [
+                'name' => 'Conflicting Booking',
+                'dni' => '88888888',
+            ],
+        ]);
+    }
+
+    public function test_auto_cancel_with_mixed_statuses(): void
+    {
+        // Crear múltiples reservas con diferentes estados
+        // 1. Expirada (debe cancelarse)
+        $expiredPending = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'pending_until' => now()->subHours(2),
+        ]);
+
+        // 2. Válida (no debe cancelarse)
+        $validPending = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'pending_until' => now()->addHours(24),
+        ]);
+
+        // 3. Confirmada (no debe cancelarse)
+        $confirmed = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->otherCabin->id,
+            'status' => Reservation::STATUS_CONFIRMED,
+            'pending_until' => null,
+        ]);
+
+        // 4. Finalizada (no debe cancelarse)
+        $finished = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->otherCabin->id,
+            'status' => Reservation::STATUS_FINISHED,
+            'pending_until' => null,
+        ]);
+
+        // 5. Ya cancelada (no debe intentarse cancelar de nuevo)
+        $alreadyCancelled = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'status' => Reservation::STATUS_CANCELLED,
+            'pending_until' => null,
+        ]);
+
+        // Ejecutar cancelación automática
+        $result = $this->service->autoCalcellExpiredPending();
+
+        // Verificar que solo se canceló la expirada
+        $this->assertEquals(1, $result['cancelled']);
+        $this->assertEquals(0, $result['failed']);
+
+        // Verificar estados finales
+        $expiredPending->refresh();
+        $this->assertTrue($expiredPending->isCancelled());
+
+        $validPending->refresh();
+        $this->assertTrue($validPending->isPendingConfirmation());
+
+        $confirmed->refresh();
+        $this->assertTrue($confirmed->isConfirmed());
+
+        $finished->refresh();
+        $this->assertTrue($finished->isFinished());
+
+        $alreadyCancelled->refresh();
+        $this->assertTrue($alreadyCancelled->isCancelled());
+    }
 }

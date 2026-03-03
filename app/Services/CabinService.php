@@ -14,9 +14,9 @@ use Illuminate\Support\Facades\DB;
 
 class CabinService extends Service
 {
-    public function __construct()
+    public function __construct(Cabin $cabin)
     {
-        parent::__construct(new Cabin());
+        parent::__construct($cabin);
     }
 
     /**
