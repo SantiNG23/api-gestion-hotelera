@@ -24,7 +24,6 @@ class DailySummaryController extends Controller
         $date = $request->date ? Carbon::parse($request->date) : Carbon::today();
 
         $summary = $this->dailySummaryService->getDailySummary($date);
-        $summary['occupancy'] = $this->dailySummaryService->getOccupancyStats($date);
 
         return $this->successResponse(new DailySummaryResource($summary));
     }

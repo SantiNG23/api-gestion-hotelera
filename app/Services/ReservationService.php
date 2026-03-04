@@ -109,7 +109,7 @@ class ReservationService extends Service
             }
 
             $reservation = $reservation->load(['client', 'cabin', 'guests']);
-            
+
             ReservationCreated::dispatch($reservation);
 
             return $reservation;
@@ -384,6 +384,36 @@ class ReservationService extends Service
         ]);
 
         return $reservation->fresh(['client', 'cabin', 'guests', 'payments']);
+    }
+
+    /**
+     * Cancela automáticamente las reservas pendientes que han excedido su límite de tiempo
+     *
+     * @return array{cancelled: int, failed: int} Array con cantidad de canceladas y fallidas
+     */
+    public function autoCalcellExpiredPending(): array
+    {
+        $expiredReservations = Reservation::where('status', Reservation::STATUS_PENDING_CONFIRMATION)
+            ->whereNotNull('pending_until')
+            ->where('pending_until', '<', now())
+            ->get();
+
+        $cancelled = 0;
+        $failed = 0;
+
+        foreach ($expiredReservations as $reservation) {
+            try {
+                $this->cancel($reservation->id);
+                $cancelled++;
+            } catch (\Exception $e) {
+                $failed++;
+            }
+        }
+
+        return [
+            'cancelled' => $cancelled,
+            'failed' => $failed,
+        ];
     }
 
     /**

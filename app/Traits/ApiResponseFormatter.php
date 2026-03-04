@@ -19,8 +19,6 @@ use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
-use Illuminate\Session\TokenMismatchException;
-use JsonSerializable;
 
 /**
  * Trait ApiResponseFormatter
