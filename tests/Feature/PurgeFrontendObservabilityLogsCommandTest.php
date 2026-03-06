@@ -7,10 +7,18 @@ namespace Tests\Feature;
 use App\Models\FrontendObservabilityLog;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class PurgeFrontendObservabilityLogsCommandTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
+    }
+
     public function test_command_purges_only_logs_older_than_cutoff(): void
     {
         Carbon::setTestNow(Carbon::create(2026, 3, 6, 12, 0, 0));
@@ -81,6 +89,7 @@ class PurgeFrontendObservabilityLogsCommandTest extends TestCase
     private function createFrontendLog(array $attributes = []): FrontendObservabilityLog
     {
         return FrontendObservabilityLog::query()->create(array_merge([
+            'id' => (string) Str::uuid(),
             'tenant_id' => null,
             'user_id' => null,
             'level' => 'info',
