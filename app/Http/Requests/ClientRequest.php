@@ -19,11 +19,11 @@ class ClientRequest extends ApiRequest
         $clientId = $this->route('client');
         $tenantId = Auth::user()?->tenant_id;
         $isUpdate = $this->isMethod('PUT') || $this->isMethod('PATCH');
+        $isPost = $this->isMethod('POST');
 
         $rules = [
-            'name' => [$isUpdate ? 'sometimes' : 'required', 'string', 'max:255'],
+            'name' => ['string', 'max:255'],
             'dni' => [
-                $isUpdate ? 'sometimes' : 'required',
                 'string',
                 'max:20',
             ],
@@ -33,8 +33,13 @@ class ClientRequest extends ApiRequest
             'email' => ['nullable', 'email', 'max:255'],
         ];
 
+        if ($isPost) {
+            array_unshift($rules['name'], 'required');
+            array_unshift($rules['dni'], 'required');
+        }
+
         // Validación única de DNI por tenant
-        if ($this->isMethod('POST')) {
+        if ($isPost) {
             $rules['dni'][] = Rule::unique('clients', 'dni')->where('tenant_id', $tenantId);
         } elseif ($isUpdate && $this->has('dni')) {
             $rules['dni'][] = Rule::unique('clients', 'dni')->ignore($clientId)->where('tenant_id', $tenantId);

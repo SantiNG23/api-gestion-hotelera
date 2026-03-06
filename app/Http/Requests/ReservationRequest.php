@@ -13,27 +13,20 @@ class ReservationRequest extends ApiRequest
      */
     public function rules(): array
     {
-        $isUpdate = $this->isMethod('PUT') || $this->isMethod('PATCH');
-
-        $checkInRules = $isUpdate
-            ? ['sometimes', 'date']
-            : ['required', 'date', 'after_or_equal:today'];
-
-        $checkOutRules = $isUpdate
-            ? ['sometimes', 'date', 'after:check_in_date']
-            : ['required', 'date', 'after:check_in_date'];
+        $isPost = $this->isMethod('POST');
+        $isBlocked = $this->boolean('is_blocked');
 
         $rules = [
-            'cabin_id' => [$isUpdate ? 'sometimes' : 'required', 'integer', 'exists:cabins,id'],
-            'num_guests' => [$isUpdate ? 'sometimes' : 'required', 'integer', 'min:2', 'max:255'],
-            'check_in_date' => $checkInRules,
-            'check_out_date' => $checkOutRules,
+            'cabin_id' => ['integer', 'exists:cabins,id'],
+            'num_guests' => ['integer', 'min:2', 'max:255'],
+            'check_in_date' => ['date'],
+            'check_out_date' => ['date', 'after:check_in_date'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'is_blocked' => ['sometimes', 'boolean'],
             'pending_hours' => ['sometimes', 'integer', 'min:1', 'max:72'],
 
             // Cliente (siempre se envía el objeto client)
-            'client' => [$isUpdate || $this->is_blocked ? 'sometimes' : 'required', 'array'],
+            'client' => ['array'],
             'client.name' => ['required_with:client', 'string', 'max:255'],
             'client.dni' => ['required_with:client', 'string', 'max:20'],
             'client.age' => ['nullable', 'integer', 'min:0', 'max:150'],
@@ -50,8 +43,18 @@ class ReservationRequest extends ApiRequest
             'guests.*.phone' => ['nullable', 'string', 'max:50'],
             'guests.*.email' => ['nullable', 'email', 'max:255'],
         ];
-        // En update permitir fechas pasadas (reservas existentes)
-        // (ya manejado en $checkInRules / $checkOutRules)
+
+        if ($isPost) {
+            array_unshift($rules['cabin_id'], 'required');
+            array_unshift($rules['num_guests'], 'required');
+            array_unshift($rules['check_in_date'], 'required');
+            $rules['check_in_date'][] = 'after_or_equal:today';
+            array_unshift($rules['check_out_date'], 'required');
+
+            if (! $isBlocked) {
+                array_unshift($rules['client'], 'required');
+            }
+        }
 
         return $rules;
     }

@@ -14,17 +14,20 @@ class PriceGroupCompleteRequest extends ApiRequest
     public function rules(): array
     {
         $isUpdate = $this->isMethod('PUT') || $this->isMethod('PATCH');
+        $isPost = $this->isMethod('POST');
         $priceGroupId = $this->route('id');
+        $tenantId = $this->user()->tenant_id;
+        $ignoredId = $isUpdate ? (string) $priceGroupId : 'NULL';
 
-        $nameRule = $isUpdate
-            ? 'string|max:255|unique:price_groups,name,' . $priceGroupId . ',id,tenant_id,' . auth()->user()->tenant_id
-            : 'required|string|max:255|unique:price_groups,name,NULL,id,tenant_id,' . auth()->user()->tenant_id;
-
-        return [
-            'name' => $nameRule,
+        $rules = [
+            'name' => [
+                'string',
+                'max:255',
+                "unique:price_groups,name,{$ignoredId},id,tenant_id,{$tenantId}",
+            ],
             'priority' => ['nullable', 'integer', 'min:0'],
             'is_default' => ['boolean'],
-            'cabins' => $isUpdate ? ['array', 'min:1'] : ['required', 'array', 'min:1'],
+            'cabins' => ['array', 'min:1'],
             'cabins.*.cabin_id' => ['required_with:cabins', 'integer', 'exists:cabins,id'],
             'cabins.*.prices' => ['required_with:cabins', 'array', 'min:1'],
             'cabins.*.prices.*.num_guests' => ['required_with:cabins', 'integer', 'min:2', 'max:255'],
@@ -33,6 +36,13 @@ class PriceGroupCompleteRequest extends ApiRequest
             'date_ranges.*.start_date' => ['required_with:date_ranges', 'date', 'date_format:Y-m-d'],
             'date_ranges.*.end_date' => ['required_with:date_ranges', 'date', 'date_format:Y-m-d', 'after:date_ranges.*.start_date'],
         ];
+
+        if ($isPost) {
+            array_unshift($rules['name'], 'required');
+            array_unshift($rules['cabins'], 'required');
+        }
+
+        return $rules;
     }
 
     /**

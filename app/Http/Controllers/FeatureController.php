@@ -82,4 +82,3 @@ class FeatureController extends Controller
         return $this->successResponse(null, 'Característica eliminada exitosamente');
     }
 }
-

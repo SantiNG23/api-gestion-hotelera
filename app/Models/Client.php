@@ -43,4 +43,3 @@ class Client extends Model
         return $this->hasMany(Reservation::class);
     }
 }
-

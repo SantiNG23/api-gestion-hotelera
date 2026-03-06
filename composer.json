@@ -70,6 +70,12 @@
         ],
         "format:test": [
             "@php ./vendor/bin/pint --test"
+        ],
+        "lint": [
+            "@composer format:test"
+        ],
+        "lint:fix": [
+            "@composer format"
         ]
     },
     "extra": {

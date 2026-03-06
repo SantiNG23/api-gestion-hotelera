@@ -12,7 +12,7 @@ class ClientService extends Service
 {
     public function __construct()
     {
-        parent::__construct(new Client());
+        parent::__construct(new Client);
     }
 
     /**
@@ -95,4 +95,3 @@ class ClientService extends Service
         return ['name', 'dni', 'city', 'phone', 'email'];
     }
 }
-

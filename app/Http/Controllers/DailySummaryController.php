@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\DailySummaryRequest;
 use App\Http\Resources\DailySummaryResource;
 use App\Services\DailySummaryService;
-use App\Http\Requests\DailySummaryRequest;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 
@@ -28,4 +28,3 @@ class DailySummaryController extends Controller
         return $this->successResponse(new DailySummaryResource($summary));
     }
 }
-

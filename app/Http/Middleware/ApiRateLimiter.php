@@ -29,6 +29,10 @@ class ApiRateLimiter
      */
     public function handle(Request $request, Closure $next): Response
     {
+        if ($request->routeIs('observability.frontend-logs.store')) {
+            return $next($request);
+        }
+
         $key = $this->getRateLimiterKey($request);
 
         if ($this->limiter->tooManyAttempts($key, $this->getMaxAttempts())) {
@@ -98,8 +102,8 @@ class ApiRateLimiter
             'success' => false,
             'message' => 'Demasiadas solicitudes',
             'errors' => [
-                'rate_limit' => 'Has excedido el límite de solicitudes permitidas'
-            ]
+                'rate_limit' => 'Has excedido el límite de solicitudes permitidas',
+            ],
         ], 429);
 
         return $this->addHeaders(

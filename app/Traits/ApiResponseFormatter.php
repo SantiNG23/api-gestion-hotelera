@@ -4,21 +4,21 @@ declare(strict_types=1);
 
 namespace App\Traits;
 
+use App\Http\Resources\ApiCollection;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\QueryException;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Http\Resources\Json\ResourceCollection;
 use Illuminate\Pagination\LengthAwarePaginator;
-use App\Http\Resources\ApiCollection;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Illuminate\Auth\AuthenticationException;
-use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Database\QueryException;
 use Illuminate\Validation\ValidationException;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
-use Illuminate\Http\Exceptions\ThrottleRequestsException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Trait ApiResponseFormatter
@@ -86,7 +86,7 @@ trait ApiResponseFormatter
 
         // Logging solo si es un error inesperado (500+)
         if ($data['status'] >= 500) {
-            Log::error('Error en la aplicación: ' . $e->getMessage(), [
+            Log::error('Error en la aplicación: '.$e->getMessage(), [
                 'exception' => get_class($e),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -138,7 +138,7 @@ trait ApiResponseFormatter
             $errors = [
                 'exception' => get_class($e),
                 'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'line' => $e->getLine(),
             ];
         }
 
@@ -173,11 +173,12 @@ trait ApiResponseFormatter
      */
     protected function transformResource($resource): JsonResource
     {
-        if (!$resource instanceof Model) {
+        if (! $resource instanceof Model) {
             return new JsonResource($resource);
         }
 
         $resourceClass = $this->getResourceClass($resource);
+
         return new $resourceClass($resource);
     }
 
@@ -189,7 +190,7 @@ trait ApiResponseFormatter
         $modelName = class_basename($model);
         $resourceClass = "App\\Http\\Resources\\{$modelName}Resource";
 
-        if (!class_exists($resourceClass)) {
+        if (! class_exists($resourceClass)) {
             return JsonResource::class;
         }
 
@@ -204,7 +205,7 @@ trait ApiResponseFormatter
         $modelName = class_basename($model);
         $collectionClass = "App\\Http\\Resources\\{$modelName}Collection";
 
-        if (!class_exists($collectionClass)) {
+        if (! class_exists($collectionClass)) {
             return ApiCollection::class;
         }
 

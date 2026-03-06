@@ -15,18 +15,18 @@ class ValidateApiHeaders
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (!$this->validateAcceptHeader($request)) {
+        if (! $this->validateAcceptHeader($request)) {
             return response()->json([
                 'success' => false,
-                'message' => 'El header Accept debe ser application/json'
+                'message' => 'El header Accept debe ser application/json',
             ], 400);
         }
 
         if ($request->isMethod('POST') || $request->isMethod('PUT') || $request->isMethod('PATCH')) {
-            if (!$this->validateContentTypeHeader($request)) {
+            if (! $this->validateContentTypeHeader($request)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'El header Content-Type debe ser application/json'
+                    'message' => 'El header Content-Type debe ser application/json',
                 ], 400);
             }
         }

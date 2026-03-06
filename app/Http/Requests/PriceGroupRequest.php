@@ -36,4 +36,3 @@ class PriceGroupRequest extends ApiRequest
         ];
     }
 }
-

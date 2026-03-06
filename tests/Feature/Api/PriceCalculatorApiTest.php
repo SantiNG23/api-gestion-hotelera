@@ -9,7 +9,6 @@ use App\Models\CabinPriceByGuests;
 use App\Models\PriceGroup;
 use App\Models\PriceRange;
 use App\Models\Tenant;
-use App\Models\User;
 use Carbon\Carbon;
 use Tests\TestCase;
 

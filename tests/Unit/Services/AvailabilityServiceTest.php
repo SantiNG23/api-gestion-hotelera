@@ -22,7 +22,7 @@ class AvailabilityServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new AvailabilityService();
+        $this->service = new AvailabilityService;
         $this->localTenant = Tenant::factory()->create();
         $this->localCabin = Cabin::factory()->create(['tenant_id' => $this->localTenant->id]);
         $this->localClient = Client::factory()->create(['tenant_id' => $this->localTenant->id]);

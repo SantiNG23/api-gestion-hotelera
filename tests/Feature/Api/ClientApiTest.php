@@ -161,4 +161,3 @@ class ClientApiTest extends TestCase
         $response->assertJsonCount(1, 'data');
     }
 }
-

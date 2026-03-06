@@ -4,22 +4,20 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\Cabin;
+use App\Models\CabinPriceByGuests;
 use App\Models\PriceGroup;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Collection;
+use App\Models\PriceRange;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use App\Models\Cabin;
-use App\Models\CabinPriceByGuests;
-use App\Models\PriceRange;
 use Illuminate\Validation\ValidationException;
 
 class PriceGroupService extends Service
 {
     public function __construct()
     {
-        parent::__construct(new PriceGroup());
+        parent::__construct(new PriceGroup);
     }
 
     /**
@@ -56,7 +54,7 @@ class PriceGroupService extends Service
     {
         return DB::transaction(function () use ($data) {
             // Si se marca como default, desactivar otros defaults del mismo tenant
-            if (!empty($data['is_default'])) {
+            if (! empty($data['is_default'])) {
                 $tenantId = $data['tenant_id'] ?? Auth::user()->tenant_id;
                 $this->model->where('tenant_id', $tenantId)
                     ->where('is_default', true)
@@ -74,7 +72,7 @@ class PriceGroupService extends Service
     {
         return DB::transaction(function () use ($id, $data) {
             // Si se marca como default, desactivar otros defaults del mismo tenant
-            if (!empty($data['is_default'])) {
+            if (! empty($data['is_default'])) {
                 $priceGroup = $this->getById($id);
                 $this->model->where('tenant_id', $priceGroup->tenant_id)
                     ->where('id', '!=', $id)
@@ -93,11 +91,11 @@ class PriceGroupService extends Service
     public function deletePriceGroup(int $id): bool
     {
         $priceGroup = $this->getById($id);
-        
+
         // Eliminar en cascada antes del hard delete
         $priceGroup->priceRanges()->forceDelete();
         $priceGroup->cabinPricesByGuests()->forceDelete();
-        
+
         // Realizar eliminación completa del grupo
         return (bool) $priceGroup->forceDelete();
     }
@@ -110,27 +108,28 @@ class PriceGroupService extends Service
         $priceGroup = $this->model->where('tenant_id', Auth::user()->tenant_id)
             ->with([
                 'priceRanges',
-                'cabinPricesByGuests.cabin:id,name,description,capacity,is_active'
+                'cabinPricesByGuests.cabin:id,name,description,capacity,is_active',
             ])
             ->findOrFail($id);
 
         // Agrupar precios por cabaña, filtrando cabañas eliminadas
         $cabinsWithPrices = $priceGroup->cabinPricesByGuests
             ->groupBy('cabin_id')
-            ->filter(fn($prices) => $prices->first()?->cabin !== null)
+            ->filter(fn ($prices) => $prices->first()?->cabin !== null)
             ->map(function ($prices) {
                 $cabin = $prices->first()->cabin;
+
                 return [
                     'id' => $cabin->id,
                     'name' => $cabin->name,
                     'description' => $cabin->description,
                     'capacity' => $cabin->capacity,
                     'is_active' => $cabin->is_active,
-                    'prices_in_group' => $prices->map(fn($p) => [
+                    'prices_in_group' => $prices->map(fn ($p) => [
                         'id' => $p->id,
                         'num_guests' => $p->num_guests,
                         'price_per_night' => (float) $p->price_per_night,
-                    ])->sortBy('num_guests')->values()
+                    ])->sortBy('num_guests')->values(),
                 ];
             })
             ->values();
@@ -149,8 +148,8 @@ class PriceGroupService extends Service
     public function createCompletePriceGroup(array $data): PriceGroup
     {
         $this->validateCabinsAndPrices($data['cabins']);
-        
-        if (!empty($data['date_ranges'])) {
+
+        if (! empty($data['date_ranges'])) {
             $this->validateDateRanges($data['date_ranges']);
         }
 
@@ -180,7 +179,7 @@ class PriceGroupService extends Service
             }
 
             // 3. Crear los rangos de fecha
-            if (!empty($data['date_ranges'])) {
+            if (! empty($data['date_ranges'])) {
                 foreach ($data['date_ranges'] as $rangeData) {
                     PriceRange::create([
                         'price_group_id' => $priceGroup->id,
@@ -202,11 +201,11 @@ class PriceGroupService extends Service
     {
         $priceGroup = $this->getById($id);
 
-        if (!empty($data['cabins'])) {
+        if (! empty($data['cabins'])) {
             $this->validateCabinsAndPrices($data['cabins']);
         }
-        
-        if (!empty($data['date_ranges'])) {
+
+        if (! empty($data['date_ranges'])) {
             $this->validateDateRanges($data['date_ranges']);
         }
 
@@ -256,27 +255,27 @@ class PriceGroupService extends Service
     {
         $seen = [];
         $tenantId = Auth::user()->tenant_id;
-        
+
         foreach ($cabins as $cabinData) {
             $cabin = Cabin::findOrFail($cabinData['cabin_id']);
-            
+
             if ($cabin->tenant_id !== $tenantId) {
                 throw ValidationException::withMessages([
-                    'cabins' => ['La cabaña no pertenece a tu cuenta']
+                    'cabins' => ['La cabaña no pertenece a tu cuenta'],
                 ]);
             }
-            
+
             foreach ($cabinData['prices'] as $priceData) {
                 if ($priceData['num_guests'] > $cabin->capacity) {
                     throw ValidationException::withMessages([
-                        'cabins.prices' => ["La cantidad de huéspedes ({$priceData['num_guests']}) excede la capacidad de '{$cabin->name}' ({$cabin->capacity})"]
+                        'cabins.prices' => ["La cantidad de huéspedes ({$priceData['num_guests']}) excede la capacidad de '{$cabin->name}' ({$cabin->capacity})"],
                     ]);
                 }
-                
-                $key = $cabinData['cabin_id'] . '-' . $priceData['num_guests'];
+
+                $key = $cabinData['cabin_id'].'-'.$priceData['num_guests'];
                 if (isset($seen[$key])) {
                     throw ValidationException::withMessages([
-                        'cabins.prices' => ["Precio duplicado para {$priceData['num_guests']} huéspedes en '{$cabin->name}'"]
+                        'cabins.prices' => ["Precio duplicado para {$priceData['num_guests']} huéspedes en '{$cabin->name}'"],
                     ]);
                 }
                 $seen[$key] = true;
@@ -296,10 +295,10 @@ class PriceGroupService extends Service
                 $end1 = new \DateTime($ranges[$i]['end_date']);
                 $start2 = new \DateTime($ranges[$j]['start_date']);
                 $end2 = new \DateTime($ranges[$j]['end_date']);
-                
+
                 if ($start1 <= $end2 && $end1 >= $start2) {
                     throw ValidationException::withMessages([
-                        'date_ranges' => ['Los rangos de fecha no pueden solaparse']
+                        'date_ranges' => ['Los rangos de fecha no pueden solaparse'],
                     ]);
                 }
             }

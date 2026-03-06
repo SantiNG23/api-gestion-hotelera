@@ -44,4 +44,3 @@ class ReservationGuest extends EloquentModel
         return $this->belongsTo(Reservation::class);
     }
 }
-

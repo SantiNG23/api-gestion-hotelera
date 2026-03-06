@@ -9,11 +9,11 @@ use App\Http\Requests\ReservationPaymentRequest;
 use App\Http\Requests\ReservationQuoteRequest;
 use App\Http\Requests\ReservationRequest;
 use App\Http\Resources\ReservationResource;
+use App\Models\Cabin;
+use App\Services\PriceCalculatorService;
 use App\Services\ReservationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use App\Services\PriceCalculatorService;
-use App\Models\Cabin;
 
 class ReservationController extends Controller
 {
@@ -179,7 +179,7 @@ class ReservationController extends Controller
         // Validar que num_guests no exceda la capacidad
         if ($validated['num_guests'] > $cabin->capacity) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'num_guests' => ["La cabaña '{$cabin->name}' tiene capacidad para {$cabin->capacity} personas máximo"]
+                'num_guests' => ["La cabaña '{$cabin->name}' tiene capacidad para {$cabin->capacity} personas máximo"],
             ]);
         }
 

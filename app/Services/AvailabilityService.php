@@ -33,7 +33,7 @@ class AvailabilityService
             $query->where('id', '!=', $excludeReservationId);
         }
 
-        return !$query->exists();
+        return ! $query->exists();
     }
 
     /**

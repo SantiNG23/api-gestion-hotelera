@@ -93,4 +93,3 @@ class FeatureApiTest extends TestCase
         $response->assertJsonCount(2, 'data');
     }
 }
-

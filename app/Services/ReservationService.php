@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Events\ReservationCreated;
 use App\Models\Client;
 use App\Models\Reservation;
 use App\Models\ReservationPayment;
@@ -14,7 +15,6 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use App\Events\ReservationCreated;
 
 class ReservationService extends Service
 {
@@ -23,7 +23,7 @@ class ReservationService extends Service
         private readonly AvailabilityService $availabilityService,
         private readonly ClientService $clientService
     ) {
-        parent::__construct(new Reservation());
+        parent::__construct(new Reservation);
     }
 
     /**
@@ -57,7 +57,7 @@ class ReservationService extends Service
         $checkOut = Carbon::parse($data['check_out_date']);
 
         // Validar disponibilidad
-        if (!$this->availabilityService->isAvailable($data['cabin_id'], $checkIn, $checkOut)) {
+        if (! $this->availabilityService->isAvailable($data['cabin_id'], $checkIn, $checkOut)) {
             throw ValidationException::withMessages([
                 'cabin_id' => ['La cabaña no está disponible para las fechas seleccionadas'],
             ]);
@@ -104,7 +104,7 @@ class ReservationService extends Service
             ]);
 
             // Crear huéspedes si se proporcionan
-            if (!empty($data['guests'])) {
+            if (! empty($data['guests'])) {
                 $this->syncGuests($reservation, $data['guests']);
             }
 
@@ -148,7 +148,7 @@ class ReservationService extends Service
             $numGuests = max(1, $numGuests);
 
             // Validar disponibilidad (excluyendo la reserva actual)
-            if (!$this->availabilityService->isAvailable((int) $cabinId, $checkIn, $checkOut, $reservation->id)) {
+            if (! $this->availabilityService->isAvailable((int) $cabinId, $checkIn, $checkOut, $reservation->id)) {
                 throw ValidationException::withMessages([
                     'cabin_id' => ['La cabaña no está disponible para las fechas seleccionadas'],
                 ]);
@@ -199,7 +199,7 @@ class ReservationService extends Service
                 'is_blocked' => $data['is_blocked'] ?? null,
             ], fn ($value) => $value !== null);
 
-            if (!empty($updateData)) {
+            if (! empty($updateData)) {
                 $reservation->update($updateData);
             }
 
@@ -221,7 +221,7 @@ class ReservationService extends Service
     {
         $reservation = $this->getById($id);
 
-        if (!$reservation->isPendingConfirmation()) {
+        if (! $reservation->isPendingConfirmation()) {
             throw ValidationException::withMessages([
                 'status' => ['Solo se pueden confirmar reservas pendientes de confirmación'],
             ]);
@@ -264,7 +264,7 @@ class ReservationService extends Service
         $reservation = $this->getById($id);
 
         // Solo se puede pagar el saldo si la reserva está confirmada
-        if (!$reservation->isConfirmed()) {
+        if (! $reservation->isConfirmed()) {
             throw ValidationException::withMessages([
                 'status' => ['Solo se puede pagar el saldo en reservas confirmadas'],
             ]);
@@ -300,7 +300,7 @@ class ReservationService extends Service
     {
         $reservation = $this->getById($id);
 
-        if (!$reservation->isConfirmed()) {
+        if (! $reservation->isConfirmed()) {
             throw ValidationException::withMessages([
                 'status' => ['Solo se puede hacer check-in en reservas confirmadas'],
             ]);
@@ -344,7 +344,7 @@ class ReservationService extends Service
     {
         $reservation = $this->getById($id);
 
-        if (!$reservation->isCheckedIn()) {
+        if (! $reservation->isCheckedIn()) {
             throw ValidationException::withMessages([
                 'status' => ['Solo se puede hacer check-out en reservas con check-in realizado'],
             ]);
@@ -509,17 +509,17 @@ class ReservationService extends Service
         $start = $dateRange['start'] ?? null;
         $end = $dateRange['end'] ?? null;
 
-        if (!empty($start) && !empty($end)) {
+        if (! empty($start) && ! empty($end)) {
             // Ambas fechas: devolver reservas que se solapen con el rango
             // Una reserva se solapa si: check_in_date <= end AND check_out_date >= start
             $query->where(function ($q) use ($start, $end) {
                 $q->whereDate('check_in_date', '<=', $end)
                     ->whereDate('check_out_date', '>=', $start);
             });
-        } elseif (!empty($start)) {
+        } elseif (! empty($start)) {
             // Solo inicio: devolver reservas cuya check_out_date >= start
             $query->whereDate('check_out_date', '>=', $start);
-        } elseif (!empty($end)) {
+        } elseif (! empty($end)) {
             // Solo fin: devolver reservas cuya check_in_date <= end
             $query->whereDate('check_in_date', '<=', $end);
         }
@@ -560,11 +560,13 @@ class ReservationService extends Service
         if ($client) {
             // Actualizar datos si el cliente existe (pero no el DNI)
             $updatableData = Arr::except($clientData, ['dni', 'tenant_id']);
+
             return $this->clientService->updateClient($client->id, $updatableData);
         }
 
         // Crear nuevo cliente
         $clientData['tenant_id'] = $tenantId;
+
         return $this->clientService->createClient($clientData);
     }
 }

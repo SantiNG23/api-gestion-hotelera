@@ -197,13 +197,14 @@ class Reservation extends Model
      */
     public function getNightsAttribute(): int
     {
-        if (!$this->check_in_date || !$this->check_out_date) {
+        if (! $this->check_in_date || ! $this->check_out_date) {
             return 0;
         }
         // Si la reserva está bloqueada, no contar noches
         if ($this->is_blocked) {
             return 0;
         }
+
         return (int) $this->check_in_date->diffInDays($this->check_out_date);
     }
 

@@ -4,20 +4,20 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Traits\ApiResponseFormatter;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
-use App\Traits\ApiResponseFormatter;
 
 /**
  * Clase base para todos los controladores de la API
  */
 class Controller extends BaseController
 {
+    use ApiResponseFormatter;
     use AuthorizesRequests;
     use ValidatesRequests;
-    use ApiResponseFormatter;
 
     /**
      * Define los filtros permitidos para consultas

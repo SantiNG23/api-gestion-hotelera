@@ -24,7 +24,7 @@ class CabinFactory extends Factory
     {
         return [
             'tenant_id' => Tenant::factory(),
-            'name' => 'Cabaña ' . fake()->randomElement(['del Bosque', 'del Lago', 'del Sol', 'de la Montaña', 'del Valle']),
+            'name' => 'Cabaña '.fake()->randomElement(['del Bosque', 'del Lago', 'del Sol', 'de la Montaña', 'del Valle']),
             'description' => fake()->paragraph(),
             'capacity' => fake()->numberBetween(2, 8),
             'is_active' => true,
@@ -57,7 +57,7 @@ class CabinFactory extends Factory
     public function minimalData(): static
     {
         return $this->state(fn (array $attributes) => [
-            'name' => 'Cabaña ' . fake()->randomElement(['del Bosque', 'del Lago', 'del Sol', 'de la Montaña', 'del Valle']),
+            'name' => 'Cabaña '.fake()->randomElement(['del Bosque', 'del Lago', 'del Sol', 'de la Montaña', 'del Valle']),
             'capacity' => fake()->numberBetween(2, 8),
         ]);
     }

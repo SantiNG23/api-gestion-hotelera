@@ -19,8 +19,7 @@ class PriceCalculatorService
 {
     public function __construct(
         private readonly PriceRangeService $priceRangeService
-    ) {
-    }
+    ) {}
 
     /**
      * Calcula el precio total y el desglose por noche
@@ -98,7 +97,7 @@ class PriceCalculatorService
         // Obtener el grupo de precio para esta fecha
         $priceGroup = $this->getPriceGroupForDate($date);
 
-        if (!$priceGroup) {
+        if (! $priceGroup) {
             return 0;
         }
 
@@ -187,4 +186,3 @@ class PriceCalculatorService
         ];
     }
 }
-

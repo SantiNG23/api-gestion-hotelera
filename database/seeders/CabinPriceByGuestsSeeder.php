@@ -27,6 +27,7 @@ class CabinPriceByGuestsSeeder extends Seeder
 
         if ($cabins->isEmpty() || $priceGroups->isEmpty()) {
             $this->command->warn('No hay cabañas activas o grupos de precio. Ejecute otros seeders primero.');
+
             return;
         }
 
@@ -40,8 +41,9 @@ class CabinPriceByGuestsSeeder extends Seeder
         // Para cada grupo de precio que debe tener cabañas asignadas
         foreach ($priceGroups as $priceGroup) {
             // Verificar si este grupo debe tener cabañas
-            if (!in_array($priceGroup->name, $groupsWithCabins)) {
+            if (! in_array($priceGroup->name, $groupsWithCabins)) {
                 $this->command->line("  → '{$priceGroup->name}' sin cabañas asignadas (ejemplo de grupo sin cabañas)");
+
                 continue;
             }
 
@@ -64,7 +66,7 @@ class CabinPriceByGuestsSeeder extends Seeder
                         ->where('num_guests', $numGuests)
                         ->first();
 
-                    if (!$priceRecord) {
+                    if (! $priceRecord) {
                         CabinPriceByGuests::create([
                             'tenant_id' => $cabin->tenant_id,
                             'cabin_id' => $cabin->id,
@@ -81,7 +83,7 @@ class CabinPriceByGuestsSeeder extends Seeder
         }
 
         $this->command->info("✓ Precios de cabañas creados: {$pricesCreated} registros");
-        $this->command->line("  Fórmula: Precio Total = Tarifa Base × Cantidad de Personas");
-        $this->command->line("  Ejemplo: Temporada Baja (100/persona) → 2 pax = 200, 3 pax = 300");
+        $this->command->line('  Fórmula: Precio Total = Tarifa Base × Cantidad de Personas');
+        $this->command->line('  Ejemplo: Temporada Baja (100/persona) → 2 pax = 200, 3 pax = 300');
     }
 }

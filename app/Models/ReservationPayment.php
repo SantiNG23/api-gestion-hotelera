@@ -62,4 +62,3 @@ class ReservationPayment extends EloquentModel
         return $this->payment_type === self::TYPE_BALANCE;
     }
 }
-

@@ -13,16 +13,23 @@ class CabinRequest extends ApiRequest
      */
     public function rules(): array
     {
-        $isUpdate = $this->isMethod('PUT') || $this->isMethod('PATCH');
+        $isPost = $this->isMethod('POST');
 
-        return [
-            'name' => [$isUpdate ? 'sometimes' : 'required', 'string', 'max:255'],
+        $rules = [
+            'name' => ['string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
-            'capacity' => [$isUpdate ? 'sometimes' : 'required', 'integer', 'min:1', 'max:50'],
+            'capacity' => ['integer', 'min:1', 'max:50'],
             'is_active' => ['sometimes', 'boolean'],
             'feature_ids' => ['sometimes', 'array'],
             'feature_ids.*' => ['integer', 'exists:features,id'],
         ];
+
+        if ($isPost) {
+            array_unshift($rules['name'], 'required');
+            array_unshift($rules['capacity'], 'required');
+        }
+
+        return $rules;
     }
 
     /**

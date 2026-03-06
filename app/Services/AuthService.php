@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Events\UserRegistered;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
-use App\Events\UserRegistered;
 
 class AuthService
 {
@@ -43,12 +43,12 @@ class AuthService
     {
         $user = User::where('email', $data['email'])->first();
 
-        if (!$user) {
+        if (! $user) {
             $user = $this->createUser($data);
             UserRegistered::dispatch($user);
-        } elseif (!$this->validateCredentials($data['email'], $data['password'])) {
+        } elseif (! $this->validateCredentials($data['email'], $data['password'])) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'email' => ['Las credenciales proporcionadas son incorrectas.']
+                'email' => ['Las credenciales proporcionadas son incorrectas.'],
             ]);
         }
 

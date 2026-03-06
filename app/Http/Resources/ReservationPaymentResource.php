@@ -23,4 +23,3 @@ class ReservationPaymentResource extends ApiResource
         ];
     }
 }
-
