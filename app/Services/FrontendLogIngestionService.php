@@ -6,9 +6,11 @@ namespace App\Services;
 
 use App\Models\FrontendObservabilityLog;
 use Carbon\Carbon;
+use Carbon\Exceptions\InvalidFormatException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class FrontendLogIngestionService
 {
@@ -31,7 +33,14 @@ class FrontendLogIngestionService
 
     public function ingest(array $data, Request $request): FrontendObservabilityLog
     {
-        $occurredAt = Carbon::parse($data['timestamp'])->utc();
+        try {
+            $occurredAt = Carbon::parse($data['timestamp'])->utc();
+        } catch (InvalidFormatException) {
+            throw ValidationException::withMessages([
+                'timestamp' => ['El campo timestamp debe ser una fecha ISO8601 válida.'],
+            ]);
+        }
+
         $ingestedAt = now()->utc();
 
         $record = FrontendObservabilityLog::create([

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use DateTimeImmutable;
 use Illuminate\Validation\Validator;
 
 class StoreFrontendLogRequest extends ApiRequest
@@ -63,6 +64,12 @@ class StoreFrontendLogRequest extends ApiRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
+            $timestamp = $this->input('timestamp');
+
+            if (is_string($timestamp) && ! $this->isStrictlyParseableIso8601($timestamp)) {
+                $validator->errors()->add('timestamp', 'El campo timestamp debe ser una fecha ISO8601 válida.');
+            }
+
             $eventName = $this->input('event_name');
             $args = $this->input('args');
 
@@ -82,6 +89,38 @@ class StoreFrontendLogRequest extends ApiRequest
                 $validator->errors()->add('payload', 'El payload no puede superar 32KB.');
             }
         });
+    }
+
+    private function isStrictlyParseableIso8601(string $timestamp): bool
+    {
+        if (! preg_match('/^(?<date>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(?<fraction>\d{1,6}))?(?<tz>Z|[+\-]\d{2}:\d{2})$/', $timestamp, $matches)) {
+            return false;
+        }
+
+        $fraction = $matches['fraction'] ?? null;
+        $timezone = $matches['tz'] === 'Z' ? '+00:00' : $matches['tz'];
+
+        $normalizedTimestamp = $matches['date']
+            . ($fraction !== null && $fraction !== '' ? '.'.str_pad($fraction, 6, '0') : '')
+            . $timezone;
+
+        $format = $fraction !== null && $fraction !== ''
+            ? 'Y-m-d\TH:i:s.uP'
+            : 'Y-m-d\TH:i:sP';
+
+        $parsed = DateTimeImmutable::createFromFormat($format, $normalizedTimestamp);
+
+        if ($parsed === false) {
+            return false;
+        }
+
+        $errors = DateTimeImmutable::getLastErrors();
+
+        if ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0)) {
+            return false;
+        }
+
+        return $parsed->format($format) === $normalizedTimestamp;
     }
 
     public function messages(): array
