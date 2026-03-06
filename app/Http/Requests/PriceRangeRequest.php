@@ -13,19 +13,19 @@ class PriceRangeRequest extends ApiRequest
      */
     public function rules(): array
     {
+        $isPost = $this->isMethod('POST');
+
         $rules = [
-            'price_group_id' => ['required', 'integer', 'exists:price_groups,id'],
-            'start_date' => ['required', 'date', 'after_or_equal:today'],
-            'end_date' => ['required', 'date', 'after:start_date'],
+            'price_group_id' => ['integer', 'exists:price_groups,id'],
+            'start_date' => ['date'],
+            'end_date' => ['date', 'after:start_date'],
         ];
 
-        // En update, los campos no son obligatorios
-        if ($this->isMethod('PUT') || $this->isMethod('PATCH')) {
-            $rules['price_group_id'][0] = 'sometimes';
-            $rules['start_date'][0] = 'sometimes';
-            $rules['end_date'][0] = 'sometimes';
-            // Permitir fechas en el pasado para ediciones
-            $rules['start_date'] = ['sometimes', 'date'];
+        if ($isPost) {
+            array_unshift($rules['price_group_id'], 'required');
+            array_unshift($rules['start_date'], 'required');
+            $rules['start_date'][] = 'after_or_equal:today';
+            array_unshift($rules['end_date'], 'required');
         }
 
         return $rules;

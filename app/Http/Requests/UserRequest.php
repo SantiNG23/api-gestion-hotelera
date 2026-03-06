@@ -18,7 +18,12 @@ class UserRequest extends ApiRequest
     {
         // Reglas comunes para todas las peticiones
         $rules = [
-            'name' => 'string|min:3|max:255|regex:/^[\p{L}\s]+$/u',
+            'name' => [
+                'string',
+                'min:3',
+                'max:255',
+                'regex:/^[\p{L}\s]+$/u',
+            ],
             'email' => [
                 'email',
                 'max:255',
@@ -36,7 +41,7 @@ class UserRequest extends ApiRequest
 
         // Si es una actualización de perfil
         if ($this->isMethod('put') && $this->route()->getName() === 'users.profile.update') {
-            $rules['name'] = 'required|'.$rules['name'];
+            array_unshift($rules['name'], 'required');
         }
 
         return $rules;
