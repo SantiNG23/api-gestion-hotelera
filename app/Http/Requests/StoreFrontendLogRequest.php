@@ -17,7 +17,7 @@ class StoreFrontendLogRequest extends ApiRequest
 
         if (is_array($context)) {
             $context = array_map(function ($item) {
-                if (!is_string($item)) {
+                if (! is_string($item)) {
                     return $item;
                 }
 
