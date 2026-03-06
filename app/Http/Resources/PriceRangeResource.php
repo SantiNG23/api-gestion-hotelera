@@ -23,4 +23,3 @@ class PriceRangeResource extends ApiResource
         ];
     }
 }
-

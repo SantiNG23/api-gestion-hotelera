@@ -48,4 +48,3 @@ class PriceRangeRequest extends ApiRequest
         ];
     }
 }
-

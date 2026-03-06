@@ -20,6 +20,6 @@ class SendReservationConfirmationEmail implements ShouldQueue
     {
         // El cliente ha realizado una reserva (en el front o el dueño por él)
         // Aquí enviaríamos el mail con los detalles del pago de la seña.
-        Log::info('Enviando email de confirmación para reserva #' . $event->reservation->id);
+        Log::info('Enviando email de confirmación para reserva #'.$event->reservation->id);
     }
 }

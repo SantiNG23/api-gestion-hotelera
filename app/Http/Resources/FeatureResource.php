@@ -22,4 +22,3 @@ class FeatureResource extends ApiResource
         ];
     }
 }
-

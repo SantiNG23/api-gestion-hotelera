@@ -22,7 +22,7 @@ class DailySummaryServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new DailySummaryService();
+        $this->service = new DailySummaryService;
         $this->localTenant = Tenant::factory()->create();
         $this->localCabin = Cabin::factory()->create(['tenant_id' => $this->localTenant->id]);
         $this->localClient = Client::factory()->create(['tenant_id' => $this->localTenant->id]);

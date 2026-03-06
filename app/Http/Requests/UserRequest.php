@@ -36,7 +36,7 @@ class UserRequest extends ApiRequest
 
         // Si es una actualización de perfil
         if ($this->isMethod('put') && $this->route()->getName() === 'users.profile.update') {
-            $rules['name'] = 'required|' . $rules['name'];
+            $rules['name'] = 'required|'.$rules['name'];
         }
 
         return $rules;

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
-use App\Models\CabinPriceByGuests;
 use App\Models\Cabin;
+use App\Models\CabinPriceByGuests;
 use App\Models\PriceGroup;
 use App\Models\PriceRange;
 use Tests\TestCase;
@@ -170,7 +170,7 @@ class PriceGroupApiTest extends TestCase
     public function test_deleting_price_group_also_deletes_associated_records(): void
     {
         $priceGroup = PriceGroup::factory()->create(['tenant_id' => $this->tenant->id]);
-        
+
         // Crear rangos de precio asociados
         $priceRanges = PriceRange::factory()
             ->count(2)
@@ -178,7 +178,7 @@ class PriceGroupApiTest extends TestCase
                 'price_group_id' => $priceGroup->id,
                 'tenant_id' => $this->tenant->id,
             ]);
-        
+
         // Crear precios de cabañas asociados
         $cabinPrices = CabinPriceByGuests::factory()
             ->count(3)
@@ -192,15 +192,15 @@ class PriceGroupApiTest extends TestCase
             ->deleteJson("/api/v1/price-groups/{$priceGroup->id}");
 
         $this->assertApiResponse($response);
-        
+
         // Verificar que el grupo de precios se eliminó
         $this->assertDatabaseMissing('price_groups', ['id' => $priceGroup->id]);
-        
+
         // Verificar que los rangos de precio también se eliminaron
         foreach ($priceRanges as $range) {
             $this->assertDatabaseMissing('price_ranges', ['id' => $range->id]);
         }
-        
+
         // Verificar que los precios de cabañas también se eliminaron
         foreach ($cabinPrices as $price) {
             $this->assertDatabaseMissing('cabin_price_by_guests', ['id' => $price->id]);
@@ -211,7 +211,7 @@ class PriceGroupApiTest extends TestCase
     {
         $cabin = Cabin::factory()->create(['tenant_id' => $this->tenant->id, 'capacity' => 4]);
         $priceGroup = PriceGroup::factory()->create(['tenant_id' => $this->tenant->id]);
-        
+
         // Crear precios para la cabaña en este grupo
         CabinPriceByGuests::factory()->create([
             'cabin_id' => $cabin->id,
@@ -239,7 +239,7 @@ class PriceGroupApiTest extends TestCase
     public function test_show_complete_returns_404_for_nonexistent_group(): void
     {
         $response = $this->withHeaders($this->authHeaders())
-            ->getJson("/api/v1/price-groups/99999/complete");
+            ->getJson('/api/v1/price-groups/99999/complete');
 
         $response->assertStatus(404)
             ->assertJsonPath('success', false)
@@ -259,9 +259,9 @@ class PriceGroupApiTest extends TestCase
                     'prices' => [
                         ['num_guests' => 2, 'price_per_night' => 100.00],
                         ['num_guests' => 3, 'price_per_night' => 150.00],
-                    ]
-                ]
-            ]
+                    ],
+                ],
+            ],
         ];
 
         $response = $this->withHeaders($this->authHeaders())
@@ -300,9 +300,9 @@ class PriceGroupApiTest extends TestCase
                     'cabin_id' => $cabin->id,
                     'prices' => [
                         ['num_guests' => 2, 'price_per_night' => 100.00],
-                    ]
-                ]
-            ]
+                    ],
+                ],
+            ],
         ];
 
         $response = $this->withHeaders($this->authHeaders())
@@ -324,18 +324,18 @@ class PriceGroupApiTest extends TestCase
         // El test debe verificar que devuelve 404 cuando el grupo no existe
         // Pero la validación del request ocurre primero, así que necesitamos datos válidos
         $cabin = Cabin::factory()->create(['tenant_id' => $this->tenant->id, 'capacity' => 4]);
-        
+
         $response = $this->withHeaders($this->authHeaders())
-            ->putJson("/api/v1/price-groups/99999/complete", [
+            ->putJson('/api/v1/price-groups/99999/complete', [
                 'name' => 'Test',
                 'cabins' => [
                     [
                         'cabin_id' => $cabin->id,
                         'prices' => [
                             ['num_guests' => 2, 'price_per_night' => 100.00],
-                        ]
-                    ]
-                ]
+                        ],
+                    ],
+                ],
             ]);
 
         $response->assertStatus(404)
@@ -356,13 +356,13 @@ class PriceGroupApiTest extends TestCase
                     'prices' => [
                         ['num_guests' => 2, 'price_per_night' => 100.00],
                         ['num_guests' => 3, 'price_per_night' => 150.00],
-                    ]
-                ]
-            ]
+                    ],
+                ],
+            ],
         ];
 
         $response = $this->withHeaders($this->authHeaders())
-            ->postJson("/api/v1/price-groups/complete", $storeData);
+            ->postJson('/api/v1/price-groups/complete', $storeData);
 
         $response->assertStatus(201)
             ->assertJsonPath('data.name', 'Temporada Completa Crear')

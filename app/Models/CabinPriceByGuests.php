@@ -53,6 +53,6 @@ class CabinPriceByGuests extends Model
     public function scopeForGroupAndCabin($query, int $priceGroupId, int $cabinId)
     {
         return $query->where('price_group_id', $priceGroupId)
-                     ->where('cabin_id', $cabinId);
+            ->where('cabin_id', $cabinId);
     }
 }

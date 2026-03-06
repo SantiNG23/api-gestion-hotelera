@@ -33,4 +33,3 @@ class FeatureRequest extends ApiRequest
         ];
     }
 }
-

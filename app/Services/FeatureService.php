@@ -5,14 +5,13 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\Feature;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 class FeatureService extends Service
 {
     public function __construct()
     {
-        parent::__construct(new Feature());
+        parent::__construct(new Feature);
     }
 
     /**
@@ -74,4 +73,3 @@ class FeatureService extends Service
         return ['name'];
     }
 }
-

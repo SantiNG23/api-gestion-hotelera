@@ -210,4 +210,3 @@ class ReservationTest extends TestCase
         $this->assertEquals(5, $reservation->nights);
     }
 }
-

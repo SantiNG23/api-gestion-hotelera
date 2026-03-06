@@ -11,7 +11,7 @@ class UserService extends Service
 {
     public function __construct()
     {
-        parent::__construct(new User());
+        parent::__construct(new User);
     }
 
     /**
@@ -20,6 +20,7 @@ class UserService extends Service
     public function updateProfile(User $user, array $data): User
     {
         $user->update($data);
+
         return $user->fresh();
     }
 

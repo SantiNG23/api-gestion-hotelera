@@ -38,4 +38,3 @@ class ReservationQuoteRequest extends ApiRequest
         ];
     }
 }
-

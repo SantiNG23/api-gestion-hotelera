@@ -12,8 +12,7 @@ class FrontendLogController extends Controller
 {
     public function __construct(
         private readonly FrontendLogIngestionService $frontendLogIngestionService
-    ) {
-    }
+    ) {}
 
     public function store(StoreFrontendLogRequest $request): JsonResponse
     {

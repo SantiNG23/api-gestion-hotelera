@@ -82,4 +82,3 @@ class CabinController extends Controller
         return $this->successResponse(null, 'Cabaña eliminada exitosamente');
     }
 }
-

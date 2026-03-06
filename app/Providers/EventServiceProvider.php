@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Events\ReservationCreated;
 use App\Events\UserRegistered;
 use App\Listeners\CreateInitialUserSettings;
+use App\Listeners\SendReservationConfirmationEmail;
 use App\Listeners\SendWelcomeEmail;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Listeners\SendEmailVerificationNotification;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
 use Illuminate\Support\Facades\Event;
-use App\Events\ReservationCreated;
-use App\Listeners\SendReservationConfirmationEmail;
 
 class EventServiceProvider extends ServiceProvider
 {

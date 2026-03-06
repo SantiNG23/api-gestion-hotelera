@@ -32,4 +32,3 @@ class ReservationPaymentRequest extends ApiRequest
         ];
     }
 }
-

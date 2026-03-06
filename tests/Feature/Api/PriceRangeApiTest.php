@@ -165,7 +165,7 @@ class PriceRangeApiTest extends TestCase
         ]);
 
         $response = $this->withHeaders($this->authHeaders())
-            ->getJson('/api/v1/price-ranges/applicable-rates?start_date=' . $startDate->format('Y-m-d') . '&end_date=' . $endDate->format('Y-m-d'));
+            ->getJson('/api/v1/price-ranges/applicable-rates?start_date='.$startDate->format('Y-m-d').'&end_date='.$endDate->format('Y-m-d'));
 
         $response->assertStatus(200)
             ->assertJsonPath('data.start_date', $startDate->format('Y-m-d'))
@@ -215,7 +215,7 @@ class PriceRangeApiTest extends TestCase
         ]);
 
         $response = $this->withHeaders($this->authHeaders())
-            ->getJson('/api/v1/price-ranges/applicable-rates?start_date=' . $startDate->format('Y-m-d') . '&end_date=' . $endDate->format('Y-m-d'));
+            ->getJson('/api/v1/price-ranges/applicable-rates?start_date='.$startDate->format('Y-m-d').'&end_date='.$endDate->format('Y-m-d'));
 
         $response->assertStatus(200);
 
@@ -270,7 +270,7 @@ class PriceRangeApiTest extends TestCase
         ]);
 
         $response = $this->withHeaders($this->authHeaders())
-            ->getJson('/api/v1/price-ranges/applicable-rates?start_date=' . $startDate->format('Y-m-d') . '&end_date=' . $endDate->format('Y-m-d'));
+            ->getJson('/api/v1/price-ranges/applicable-rates?start_date='.$startDate->format('Y-m-d').'&end_date='.$endDate->format('Y-m-d'));
 
         $response->assertStatus(200);
 
@@ -289,10 +289,10 @@ class PriceRangeApiTest extends TestCase
         $endDate = $startDate->copy()->addDays(2);
 
         $response = $this->withHeaders($this->authHeaders())
-            ->getJson('/api/v1/price-ranges/applicable-rates?start_date=' . $startDate->format('Y-m-d') . '&end_date=' . $endDate->format('Y-m-d'));
+            ->getJson('/api/v1/price-ranges/applicable-rates?start_date='.$startDate->format('Y-m-d').'&end_date='.$endDate->format('Y-m-d'));
 
         $response->assertStatus(200);
-        
+
         $rates = $response->json('data.rates');
         $this->assertCount(3, $rates);
         foreach ($rates as $rate) {
@@ -301,4 +301,3 @@ class PriceRangeApiTest extends TestCase
         }
     }
 }
-

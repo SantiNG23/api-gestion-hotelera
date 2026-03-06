@@ -158,7 +158,7 @@ class DailySummaryApiTest extends TestCase
         ]);
 
         $response = $this->withHeaders($this->authHeaders())
-            ->getJson('/api/v1/daily-summary?date=' . $targetDate->format('Y-m-d'));
+            ->getJson('/api/v1/daily-summary?date='.$targetDate->format('Y-m-d'));
 
         $this->assertApiResponse($response);
         $response->assertJsonPath('data.check_ins.0.check_in_date', $targetDate->format('Y-m-d'));

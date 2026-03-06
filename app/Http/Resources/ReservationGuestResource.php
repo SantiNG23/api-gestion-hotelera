@@ -25,4 +25,3 @@ class ReservationGuestResource extends ApiResource
         ];
     }
 }
-

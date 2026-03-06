@@ -145,4 +145,3 @@ class CabinApiTest extends TestCase
         $response->assertJsonCount(2, 'data');
     }
 }
-

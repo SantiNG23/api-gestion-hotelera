@@ -64,4 +64,3 @@ class Cabin extends Model
         return $this->pricesByGuests();
     }
 }
-

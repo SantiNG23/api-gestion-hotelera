@@ -97,11 +97,10 @@ class ClientController extends Controller
     {
         $client = $this->clientService->searchByDni($dni);
 
-        if (!$client) {
+        if (! $client) {
             return $this->errorResponse('Cliente no encontrado', 404);
         }
 
         return $this->successResponse($this->transformResource($client));
     }
 }
-

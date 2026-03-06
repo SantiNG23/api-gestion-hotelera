@@ -17,8 +17,8 @@ class PriceGroupCompleteRequest extends ApiRequest
         $priceGroupId = $this->route('id');
 
         $nameRule = $isUpdate
-            ? 'string|max:255|unique:price_groups,name,' . $priceGroupId . ',id,tenant_id,' . auth()->user()->tenant_id
-            : 'required|string|max:255|unique:price_groups,name,NULL,id,tenant_id,' . auth()->user()->tenant_id;
+            ? 'string|max:255|unique:price_groups,name,'.$priceGroupId.',id,tenant_id,'.auth()->user()->tenant_id
+            : 'required|string|max:255|unique:price_groups,name,NULL,id,tenant_id,'.auth()->user()->tenant_id;
 
         return [
             'name' => $nameRule,

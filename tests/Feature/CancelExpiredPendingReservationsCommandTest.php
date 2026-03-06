@@ -6,7 +6,6 @@ namespace Tests\Feature;
 
 use App\Models\Cabin;
 use App\Models\Reservation;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Tests\TestCase;
 
@@ -101,4 +100,3 @@ class CancelExpiredPendingReservationsCommandTest extends TestCase
         $this->assertStringContainsString('Reservas canceladas: 0', $output);
     }
 }
-

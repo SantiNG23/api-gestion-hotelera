@@ -38,7 +38,6 @@ class PriceCalculatorServiceTest extends TestCase
             'is_default' => true,
         ]);
 
-
         // Crear precios por cantidad de huéspedes
         CabinPriceByGuests::factory()->create([
             'tenant_id' => $this->localTenant->id,

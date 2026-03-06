@@ -7,7 +7,6 @@ namespace App\Services;
 use App\Models\PriceGroup;
 use App\Models\PriceRange;
 use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -16,7 +15,7 @@ class PriceRangeService extends Service
 {
     public function __construct()
     {
-        parent::__construct(new PriceRange());
+        parent::__construct(new PriceRange);
     }
 
     /**
@@ -105,7 +104,7 @@ class PriceRangeService extends Service
         $start = Carbon::parse($startDate)->startOfDay();
         $end = Carbon::parse($endDate)->endOfDay();
 
-        if (!$tenantId) {
+        if (! $tenantId) {
             $tenantId = Auth::user()?->tenant_id;
         }
 
@@ -146,6 +145,7 @@ class PriceRangeService extends Service
                         if ($a->priceGroup->priority !== $b->priceGroup->priority) {
                             return $b->priceGroup->priority <=> $a->priceGroup->priority;
                         }
+
                         return $b->created_at <=> $a->created_at;
                     })
                     ->first();
@@ -188,7 +188,7 @@ class PriceRangeService extends Service
     {
         $priceGroup = PriceGroup::find($priceGroupId);
 
-        if (!$priceGroup) {
+        if (! $priceGroup) {
             throw ValidationException::withMessages([
                 'price_group_id' => ['El grupo de precio no existe para este tenant'],
             ]);

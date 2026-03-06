@@ -28,13 +28,13 @@ trait BelongsToTenant
         // Scope global para filtrar por tenant del usuario autenticado
         static::addGlobalScope('tenant', function (Builder $builder) {
             if (Auth::check() && Auth::user()->tenant_id) {
-                $builder->where($builder->getModel()->getTable() . '.tenant_id', Auth::user()->tenant_id);
+                $builder->where($builder->getModel()->getTable().'.tenant_id', Auth::user()->tenant_id);
             }
         });
 
         // Asignar automáticamente el tenant_id al crear
         static::creating(function ($model) {
-            if (Auth::check() && Auth::user()->tenant_id && !$model->tenant_id) {
+            if (Auth::check() && Auth::user()->tenant_id && ! $model->tenant_id) {
                 $model->tenant_id = Auth::user()->tenant_id;
             }
         });

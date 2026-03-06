@@ -25,7 +25,7 @@ class AvailabilityApiTest extends TestCase
     public function test_can_check_cabin_availability(): void
     {
         $response = $this->withHeaders($this->authHeaders())
-            ->getJson('/api/v1/availability?' . http_build_query([
+            ->getJson('/api/v1/availability?'.http_build_query([
                 'cabin_id' => $this->cabin->id,
                 'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
                 'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
@@ -48,7 +48,7 @@ class AvailabilityApiTest extends TestCase
         ]);
 
         $response = $this->withHeaders($this->authHeaders())
-            ->getJson('/api/v1/availability?' . http_build_query([
+            ->getJson('/api/v1/availability?'.http_build_query([
                 'cabin_id' => $this->cabin->id,
                 'check_in_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
                 'check_out_date' => Carbon::tomorrow()->addDays(4)->format('Y-m-d'),
@@ -75,7 +75,7 @@ class AvailabilityApiTest extends TestCase
         ]);
 
         $response = $this->withHeaders($this->authHeaders())
-            ->getJson('/api/v1/availability?' . http_build_query([
+            ->getJson('/api/v1/availability?'.http_build_query([
                 'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
                 'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
             ]));
@@ -101,7 +101,7 @@ class AvailabilityApiTest extends TestCase
         ]);
 
         $response = $this->withHeaders($this->authHeaders())
-            ->getJson('/api/v1/availability?' . http_build_query([
+            ->getJson('/api/v1/availability?'.http_build_query([
                 'cabin_id' => $this->cabin->id,
                 'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
                 'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
@@ -143,7 +143,7 @@ class AvailabilityApiTest extends TestCase
         ]);
 
         $response = $this->withHeaders($this->authHeaders())
-            ->getJson('/api/v1/availability/' . $this->cabin->id . '?' . http_build_query([
+            ->getJson('/api/v1/availability/'.$this->cabin->id.'?'.http_build_query([
                 'from' => '2025-01-01',
                 'to' => '2025-01-31',
             ]));
@@ -187,7 +187,7 @@ class AvailabilityApiTest extends TestCase
         ]);
 
         $response = $this->withHeaders($this->authHeaders())
-            ->getJson('/api/v1/availability/' . $this->cabin->id . '?' . http_build_query([
+            ->getJson('/api/v1/availability/'.$this->cabin->id.'?'.http_build_query([
                 'from' => '2025-01-01',
                 'to' => '2025-01-31',
             ]));
@@ -222,7 +222,7 @@ class AvailabilityApiTest extends TestCase
         ]);
 
         $response = $this->withHeaders($this->authHeaders())
-            ->getJson('/api/v1/availability/calendar?' . http_build_query([
+            ->getJson('/api/v1/availability/calendar?'.http_build_query([
                 'from' => '2025-01-01',
                 'to' => '2025-01-05',
             ]));
@@ -259,7 +259,7 @@ class AvailabilityApiTest extends TestCase
     public function test_blocked_ranges_requires_cabin(): void
     {
         $response = $this->withHeaders($this->authHeaders())
-            ->getJson('/api/v1/availability/999?' . http_build_query([
+            ->getJson('/api/v1/availability/999?'.http_build_query([
                 'from' => '2025-01-01',
                 'to' => '2025-01-31',
             ]));
@@ -270,7 +270,7 @@ class AvailabilityApiTest extends TestCase
     public function test_blocked_ranges_requires_dates(): void
     {
         $response = $this->withHeaders($this->authHeaders())
-            ->getJson('/api/v1/availability/' . $this->cabin->id);
+            ->getJson('/api/v1/availability/'.$this->cabin->id);
 
         $response->assertStatus(422);
     }

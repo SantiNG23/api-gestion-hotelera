@@ -102,8 +102,8 @@ class ApiRateLimiter
             'success' => false,
             'message' => 'Demasiadas solicitudes',
             'errors' => [
-                'rate_limit' => 'Has excedido el límite de solicitudes permitidas'
-            ]
+                'rate_limit' => 'Has excedido el límite de solicitudes permitidas',
+            ],
         ], 429);
 
         return $this->addHeaders(

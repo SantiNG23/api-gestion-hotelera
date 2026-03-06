@@ -54,11 +54,11 @@ class CabinService extends Service
         return DB::transaction(function () use ($data) {
             // Extrae y remueve feature_ids en un solo paso
             $featureIds = Arr::pull($data, 'feature_ids', []);
-            
+
             $cabin = $this->create($data);
 
             // Sincronizar solo si hay IDs (ahorra una query si está vacío)
-            if (!empty($featureIds)) {
+            if (! empty($featureIds)) {
                 $this->syncFeatures($cabin, $featureIds);
             }
 
@@ -100,6 +100,7 @@ class CabinService extends Service
         // y nos ahorramos la query de filtrado.
         if (empty($featureIds)) {
             $cabin->features()->detach();
+
             return;
         }
 
@@ -117,6 +118,7 @@ class CabinService extends Service
     protected function filterByMinCapacity(Builder $query, mixed $value): Builder
     {
         $value = (int) $value;
+
         return $query->where('capacity', '>=', $value);
     }
 

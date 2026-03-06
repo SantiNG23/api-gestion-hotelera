@@ -26,8 +26,7 @@ abstract class Service
      */
     public function __construct(
         protected Model $model
-    ) {
-    }
+    ) {}
 
     // ==============================================
     // Métodos básicos CRUD
@@ -82,7 +81,7 @@ abstract class Service
     protected function create(array $data): Model
     {
         // Set tenant_id automatically if not provided and user is authenticated
-        if (!array_key_exists('tenant_id', $data) && Auth::check()) {
+        if (! array_key_exists('tenant_id', $data) && Auth::check()) {
             $data['tenant_id'] = Auth::user()->tenant_id;
         }
 
@@ -219,7 +218,7 @@ abstract class Service
             }
 
             // Nombre del método basado en el campo (ej: filterByStatus)
-            $method = 'filterBy' . Str::studly($field);
+            $method = 'filterBy'.Str::studly($field);
 
             // 2. Si el servicio hijo define el método, tiene prioridad
             if (method_exists($this, $method)) {
@@ -240,7 +239,7 @@ abstract class Service
                 }
                 // Strings -> Búsqueda parcial (LIKE)
                 elseif (is_string($value)) {
-                    $query->where($field, 'like', '%' . strtolower($value) . '%');
+                    $query->where($field, 'like', '%'.strtolower($value).'%');
                 }
             }
         }

@@ -33,4 +33,3 @@ class ReservationGuestFactory extends Factory
         ];
     }
 }
-

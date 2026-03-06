@@ -42,4 +42,3 @@ class CancelExpiredPendingReservations extends Command
         return $result['failed'] === 0 ? Command::SUCCESS : Command::FAILURE;
     }
 }
-

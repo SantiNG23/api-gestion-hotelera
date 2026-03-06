@@ -7,7 +7,6 @@ namespace App\Http\Controllers;
 use App\Http\Requests\AvailabilityCalendarRequest;
 use App\Http\Requests\AvailabilityCheckRequest;
 use App\Http\Requests\AvailabilityShowRequest;
-use App\Http\Resources\CabinResource;
 use App\Models\Cabin;
 use App\Services\AvailabilityService;
 use Carbon\Carbon;

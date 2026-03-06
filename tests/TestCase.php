@@ -55,7 +55,7 @@ abstract class TestCase extends BaseTestCase
      */
     protected function createAuthenticatedUser(array $attributes = []): array
     {
-        if (!$this->tenant) {
+        if (! $this->tenant) {
             $this->createTenant();
         }
 
@@ -79,7 +79,7 @@ abstract class TestCase extends BaseTestCase
     protected function authHeaders(): array
     {
         return [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ];
     }

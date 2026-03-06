@@ -12,7 +12,7 @@ class CabinPriceByGuestsService extends Service
 {
     public function __construct()
     {
-        parent::__construct(new CabinPriceByGuests());
+        parent::__construct(new CabinPriceByGuests);
     }
 
     /**

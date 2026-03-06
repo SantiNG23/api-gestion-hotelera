@@ -45,4 +45,3 @@ class AvailabilityShowRequest extends ApiRequest
         ];
     }
 }
-

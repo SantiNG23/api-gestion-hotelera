@@ -37,4 +37,3 @@ class Feature extends Model
         return $this->belongsToMany(Cabin::class, 'cabin_feature');
     }
 }
-

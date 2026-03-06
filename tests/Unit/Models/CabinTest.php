@@ -68,4 +68,3 @@ class CabinTest extends TestCase
         $this->assertIsInt($cabin->capacity);
     }
 }
-

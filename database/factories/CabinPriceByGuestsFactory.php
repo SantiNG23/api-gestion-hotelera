@@ -1,9 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
 use App\Models\Cabin;
-use App\Models\CabinPriceByGuests;
 use App\Models\PriceGroup;
 use Illuminate\Database\Eloquent\Factories\Factory;
 

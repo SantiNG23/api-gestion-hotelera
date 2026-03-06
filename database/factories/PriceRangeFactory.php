@@ -34,4 +34,3 @@ class PriceRangeFactory extends Factory
         ];
     }
 }
-

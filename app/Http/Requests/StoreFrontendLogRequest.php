@@ -101,8 +101,8 @@ class StoreFrontendLogRequest extends ApiRequest
         $timezone = $matches['tz'] === 'Z' ? '+00:00' : $matches['tz'];
 
         $normalizedTimestamp = $matches['date']
-            . ($fraction !== null && $fraction !== '' ? '.'.str_pad($fraction, 6, '0') : '')
-            . $timezone;
+            .($fraction !== null && $fraction !== '' ? '.'.str_pad($fraction, 6, '0') : '')
+            .$timezone;
 
         $format = $fraction !== null && $fraction !== ''
             ? 'Y-m-d\TH:i:s.uP'
