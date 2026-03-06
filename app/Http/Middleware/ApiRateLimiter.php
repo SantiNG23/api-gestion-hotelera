@@ -29,6 +29,10 @@ class ApiRateLimiter
      */
     public function handle(Request $request, Closure $next): Response
     {
+        if ($request->routeIs('observability.frontend-logs.store')) {
+            return $next($request);
+        }
+
         $key = $this->getRateLimiterKey($request);
 
         if ($this->limiter->tooManyAttempts($key, $this->getMaxAttempts())) {

@@ -9,10 +9,12 @@ use App\Http\Controllers\CabinPriceByGuestsController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DailySummaryController;
 use App\Http\Controllers\FeatureController;
+use App\Http\Controllers\FrontendLogController;
 use App\Http\Controllers\PriceGroupController;
 use App\Http\Controllers\PriceRangeController;
 use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\UserController;
+use App\Http\Middleware\FrontendObservabilityRateLimiter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -85,5 +87,10 @@ Route::prefix('v1')->group(function () {
 
         // Resumen Diario
         Route::get('daily-summary', [DailySummaryController::class, 'index'])->name('daily-summary.index');
+
+        // Observabilidad frontend
+        Route::post('observability/frontend-logs', [FrontendLogController::class, 'store'])
+            ->middleware(FrontendObservabilityRateLimiter::class)
+            ->name('observability.frontend-logs.store');
     });
 });
