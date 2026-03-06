@@ -13,6 +13,7 @@ use Illuminate\Support\Str;
 class FrontendLogIngestionService
 {
     private const MAX_SANITIZATION_DEPTH = 6;
+    private const REQUEST_ID_MAX_LENGTH = 100;
 
     /**
      * @var array<int, string>
@@ -105,7 +106,18 @@ class FrontendLogIngestionService
             ?? $request->header('X-Request-ID')
             ?? $request->attributes->get('request_id');
 
-        return $requestId !== null ? (string) $requestId : null;
+        if ($requestId === null) {
+            return null;
+        }
+
+        $normalized = trim((string) $requestId);
+        $normalized = preg_replace('/[\x00-\x1F\x7F]/u', '', $normalized) ?? '';
+
+        if ($normalized === '') {
+            return null;
+        }
+
+        return mb_substr($normalized, 0, self::REQUEST_ID_MAX_LENGTH);
     }
 
     private function incrementIngestionMetrics(string $level): void

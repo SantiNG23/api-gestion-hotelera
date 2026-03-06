@@ -104,6 +104,28 @@ class FrontendObservabilityApiTest extends TestCase
             ]);
     }
 
+    public function test_truncates_request_id_header_to_100_chars(): void
+    {
+        $longRequestId = str_repeat('a', 180);
+        $headers = array_merge($this->authHeaders(), [
+            'X-Request-Id' => $longRequestId,
+        ]);
+
+        $response = $this->postJson(
+            '/api/v1/observability/frontend-logs',
+            $this->validPayload('warn'),
+            $headers
+        );
+
+        $response->assertStatus(201);
+
+        $log = FrontendObservabilityLog::query()->latest('ingested_at')->firstOrFail();
+
+        $this->assertNotNull($log->request_id);
+        $this->assertSame(100, strlen((string) $log->request_id));
+        $this->assertSame(substr($longRequestId, 0, 100), $log->request_id);
+    }
+
     private function validPayload(string $level, array $overrides = []): array
     {
         return array_replace_recursive([

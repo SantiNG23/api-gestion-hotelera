@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Traits\BelongsToTenant;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model as EloquentModel;
 use Illuminate\Support\Str;
 
 class FrontendObservabilityLog extends EloquentModel
 {
+    use BelongsToTenant;
     use HasFactory;
 
     protected $table = 'frontend_observability_logs';
