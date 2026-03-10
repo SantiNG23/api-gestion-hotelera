@@ -51,6 +51,40 @@ class ReservationTest extends TestCase
         $this->assertEquals($this->localCabin->id, $reservation->cabin->id);
     }
 
+    public function test_client_with_trashed_relation_can_retrieve_soft_deleted_client(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->localTenant->id,
+            'client_id' => $this->localClient->id,
+            'cabin_id' => $this->localCabin->id,
+        ]);
+
+        $this->localClient->delete();
+        $reservation->refresh();
+
+        $this->assertNull($reservation->client);
+        $clientWithTrashed = $reservation->clientWithTrashed()->first();
+        $this->assertNotNull($clientWithTrashed);
+        $this->assertEquals($this->localClient->id, $clientWithTrashed->id);
+    }
+
+    public function test_cabin_with_trashed_relation_can_retrieve_soft_deleted_cabin(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->localTenant->id,
+            'client_id' => $this->localClient->id,
+            'cabin_id' => $this->localCabin->id,
+        ]);
+
+        $this->localCabin->delete();
+        $reservation->refresh();
+
+        $this->assertNull($reservation->cabin);
+        $cabinWithTrashed = $reservation->cabinWithTrashed()->first();
+        $this->assertNotNull($cabinWithTrashed);
+        $this->assertEquals($this->localCabin->id, $cabinWithTrashed->id);
+    }
+
     public function test_has_guests_relationship(): void
     {
         $reservation = Reservation::factory()->create([

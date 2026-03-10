@@ -71,11 +71,27 @@ class Reservation extends Model
     }
 
     /**
+     * Cliente de la reserva incluyendo soft-deleted
+     */
+    public function clientWithTrashed(): BelongsTo
+    {
+        return $this->belongsTo(Client::class, 'client_id')->withTrashed();
+    }
+
+    /**
      * Cabaña de la reserva
      */
     public function cabin(): BelongsTo
     {
         return $this->belongsTo(Cabin::class);
+    }
+
+    /**
+     * Cabaña de la reserva incluyendo soft-deleted
+     */
+    public function cabinWithTrashed(): BelongsTo
+    {
+        return $this->belongsTo(Cabin::class, 'cabin_id')->withTrashed();
     }
 
     /**
