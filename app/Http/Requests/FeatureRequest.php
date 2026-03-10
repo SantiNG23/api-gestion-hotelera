@@ -13,11 +13,17 @@ class FeatureRequest extends ApiRequest
      */
     public function rules(): array
     {
-        return [
-            'name' => ['required', 'string', 'max:255'],
+        $rules = [
+            'name' => ['string', 'max:255'],
             'icon' => ['nullable', 'string', 'max:100'],
             'is_active' => ['sometimes', 'boolean'],
         ];
+
+        if ($this->isMethod('POST')) {
+            array_unshift($rules['name'], 'required');
+        }
+
+        return $rules;
     }
 
     /**

@@ -15,13 +15,22 @@ class AuthRequest extends ApiRequest
      */
     public function rules(): array
     {
+        $tenantId = $this->input('tenant_id') ?? $this->user()?->tenant_id;
+
         $rules = [
             'email' => 'required|email|max:255',
             'password' => 'required|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&.])[A-Za-z\d@$!%*?&.]+$/',
+            'tenant_id' => 'nullable|integer|exists:tenants,id',
         ];
 
+        $existingUserQuery = User::query()->where('email', $this->email);
+
+        if ($tenantId !== null) {
+            $existingUserQuery->where('tenant_id', $tenantId);
+        }
+
         // Si el email no existe, aplicamos las reglas de registro
-        if (! User::where('email', $this->email)->exists()) {
+        if (! $existingUserQuery->exists()) {
             $rules = array_merge($rules, [
                 'name' => 'required|string|min:3|max:255|regex:/^[\p{L}\s]+$/u',
                 'password' => 'required|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&.])[A-Za-z\d@$!%*?&.]+$/|confirmed',

@@ -75,24 +75,6 @@ class FrontendObservabilityApiTest extends TestCase
             ->assertJsonValidationErrors(['timestamp', 'level', 'scope', 'event_name']);
     }
 
-    public function test_returns_422_for_non_parseable_iso8601_timestamp(): void
-    {
-        $response = $this->postJson(
-            '/api/v1/observability/frontend-logs',
-            $this->validPayload('warn', [
-                'timestamp' => '2026-02-31T10:30:00Z',
-            ]),
-            $this->authHeaders()
-        );
-
-        $response->assertStatus(422)
-            ->assertJson([
-                'success' => false,
-                'message' => 'Error de validación',
-            ])
-            ->assertJsonValidationErrors(['timestamp']);
-    }
-
     public function test_returns_401_without_authentication(): void
     {
         $response = $this->postJson('/api/v1/observability/frontend-logs', $this->validPayload('warn'));

@@ -381,4 +381,43 @@ class PriceGroupApiTest extends TestCase
             'price_per_night' => 100.00,
         ]);
     }
+
+    public function test_applicable_rates_uses_representative_price_for_group_created_via_complete(): void
+    {
+        $cabin = Cabin::factory()->create(['tenant_id' => $this->tenant->id, 'capacity' => 4]);
+        $startDate = now()->addDays(5)->startOfDay();
+        $endDate = $startDate->copy()->addDays(2);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/v1/price-groups/complete', [
+                'name' => 'Grupo complete con precio representativo',
+                'priority' => 15,
+                'cabins' => [
+                    [
+                        'cabin_id' => $cabin->id,
+                        'prices' => [
+                            ['num_guests' => 2, 'price_per_night' => 100.00],
+                            ['num_guests' => 3, 'price_per_night' => 150.00],
+                        ],
+                    ],
+                ],
+                'date_ranges' => [
+                    [
+                        'start_date' => $startDate->format('Y-m-d'),
+                        'end_date' => $endDate->format('Y-m-d'),
+                    ],
+                ],
+            ]);
+
+        $response->assertStatus(201);
+        $this->assertEquals(100.0, (float) $response->json('data.price_per_night'));
+
+        $ratesResponse = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/price-ranges/applicable-rates?start_date='.$startDate->format('Y-m-d').'&end_date='.$endDate->format('Y-m-d'));
+
+        $ratesResponse->assertStatus(200);
+        foreach ($ratesResponse->json('data.rates') as $rate) {
+            $this->assertEquals(100.0, $rate['price']);
+        }
+    }
 }

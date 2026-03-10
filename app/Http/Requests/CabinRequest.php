@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
+
 class CabinRequest extends ApiRequest
 {
     /**
@@ -14,6 +17,12 @@ class CabinRequest extends ApiRequest
     public function rules(): array
     {
         $isPost = $this->isMethod('POST');
+        $tenantId = Auth::user()?->tenant_id;
+        $featureExistsRule = Rule::exists('features', 'id');
+
+        if ($tenantId !== null) {
+            $featureExistsRule = $featureExistsRule->where('tenant_id', $tenantId);
+        }
 
         $rules = [
             'name' => ['string', 'max:255'],
@@ -21,7 +30,7 @@ class CabinRequest extends ApiRequest
             'capacity' => ['integer', 'min:1', 'max:50'],
             'is_active' => ['sometimes', 'boolean'],
             'feature_ids' => ['sometimes', 'array'],
-            'feature_ids.*' => ['integer', 'exists:features,id'],
+            'feature_ids.*' => ['integer', $featureExistsRule],
         ];
 
         if ($isPost) {
@@ -45,7 +54,7 @@ class CabinRequest extends ApiRequest
             'capacity.min' => 'La capacidad mínima es 1 persona',
             'capacity.max' => 'La capacidad máxima es 50 personas',
             'feature_ids.array' => 'Las características deben ser un listado',
-            'feature_ids.*.exists' => 'Una de las características seleccionadas no existe',
+            'feature_ids.*.exists' => 'Una de las características seleccionadas no existe o no pertenece a tu organización',
         ];
     }
 }

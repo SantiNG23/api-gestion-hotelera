@@ -179,6 +179,31 @@ class ReservationTest extends TestCase
         $this->assertFalse($reservation->blocksAvailability());
     }
 
+    public function test_blocked_reservation_does_not_block_when_cancelled(): void
+    {
+        $reservation = Reservation::factory()->cancelled()->create([
+            'tenant_id' => $this->localTenant->id,
+            'client_id' => $this->localClient->id,
+            'cabin_id' => $this->localCabin->id,
+            'is_blocked' => true,
+        ]);
+
+        $this->assertFalse($reservation->blocksAvailability());
+    }
+
+    public function test_blocked_reservation_does_not_block_when_finished(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->localTenant->id,
+            'client_id' => $this->localClient->id,
+            'cabin_id' => $this->localCabin->id,
+            'status' => Reservation::STATUS_FINISHED,
+            'is_blocked' => true,
+        ]);
+
+        $this->assertFalse($reservation->blocksAvailability());
+    }
+
     public function test_has_deposit_paid(): void
     {
         $reservation = Reservation::factory()->create([

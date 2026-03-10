@@ -36,7 +36,10 @@ class PriceGroupService extends Service
      */
     public function getPriceGroup(int $id): PriceGroup
     {
-        return $this->getByIdWith($id, ['priceRanges']);
+        /** @var PriceGroup $priceGroup */
+        $priceGroup = $this->getByIdWith($id, ['priceRanges']);
+
+        return $priceGroup;
     }
 
     /**
@@ -159,7 +162,7 @@ class PriceGroupService extends Service
             // 1. Crear el PriceGroup
             $priceGroup = $this->createPriceGroup([
                 'name' => $data['name'],
-                'price_per_night' => 0,
+                'price_per_night' => $this->resolveRepresentativePricePerNight($data['cabins']),
                 'priority' => $data['priority'] ?? 0,
                 'is_default' => $data['is_default'] ?? false,
                 'tenant_id' => $tenantId,
@@ -212,8 +215,14 @@ class PriceGroupService extends Service
         return DB::transaction(function () use ($priceGroup, $data) {
             $tenantId = Auth::user()->tenant_id;
 
+            $basicData = array_intersect_key($data, array_flip(['name', 'is_default', 'priority']));
+
+            if (isset($data['cabins'])) {
+                $basicData['price_per_night'] = $this->resolveRepresentativePricePerNight($data['cabins']);
+            }
+
             // 1. Actualizar datos básicos
-            $this->updatePriceGroup($priceGroup->id, array_intersect_key($data, array_flip(['name', 'is_default', 'priority'])));
+            $this->updatePriceGroup($priceGroup->id, $basicData);
 
             // 2. Reemplazar precios de cabañas
             if (isset($data['cabins'])) {
@@ -311,5 +320,23 @@ class PriceGroupService extends Service
     protected function getGlobalSearchColumns(): array
     {
         return ['name'];
+    }
+
+    /**
+     * Calcula un precio representativo del grupo a partir del menor precio cargado.
+     */
+    private function resolveRepresentativePricePerNight(array $cabins): float
+    {
+        $prices = collect($cabins)
+            ->flatMap(fn ($cabin) => $cabin['prices'] ?? [])
+            ->pluck('price_per_night')
+            ->map(fn ($price) => (float) $price)
+            ->filter(fn ($price) => $price >= 0);
+
+        if ($prices->isEmpty()) {
+            return 0.0;
+        }
+
+        return round((float) $prices->min(), 2);
     }
 }

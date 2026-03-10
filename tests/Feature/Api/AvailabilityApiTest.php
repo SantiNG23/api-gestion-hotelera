@@ -85,6 +85,77 @@ class AvailabilityApiTest extends TestCase
         $response->assertJsonPath('data.available_count', 2);
     }
 
+    public function test_available_cabins_use_cabin_resource_contract(): void
+    {
+        Cabin::factory()->create(['tenant_id' => $this->tenant->id]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/availability?'.http_build_query([
+                'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+                'check_out_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
+            ]));
+
+        $this->assertApiResponse($response);
+        $response->assertJsonStructure([
+            'success',
+            'message',
+            'data' => [
+                'check_in_date',
+                'check_out_date',
+                'available_count',
+                'available_cabins' => [
+                    '*' => ['id', 'name', 'description', 'capacity', 'is_active', 'features'],
+                ],
+            ],
+        ]);
+
+        $firstCabin = $response->json('data.available_cabins.0');
+        $this->assertArrayNotHasKey('tenant_id', $firstCabin);
+        $this->assertArrayNotHasKey('created_at', $firstCabin);
+        $this->assertArrayNotHasKey('deleted_at', $firstCabin);
+    }
+
+    public function test_cannot_check_availability_for_cabin_from_other_tenant(): void
+    {
+        $otherTenant = $this->createTenant(['name' => 'Tenant externo']);
+        $foreignCabin = Cabin::factory()->create(['tenant_id' => $otherTenant->id]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/availability?'.http_build_query([
+                'cabin_id' => $foreignCabin->id,
+                'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+                'check_out_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
+            ]));
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['cabin_id']);
+    }
+
+    public function test_cancelled_blocked_reservation_does_not_block_availability(): void
+    {
+        $client = Client::factory()->create(['tenant_id' => $this->tenant->id]);
+
+        Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'client_id' => $client->id,
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow(),
+            'check_out_date' => Carbon::tomorrow()->addDays(5),
+            'status' => Reservation::STATUS_CANCELLED,
+            'is_blocked' => true,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/availability?'.http_build_query([
+                'cabin_id' => $this->cabin->id,
+                'check_in_date' => Carbon::tomorrow()->addDays(1)->format('Y-m-d'),
+                'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+            ]));
+
+        $this->assertApiResponse($response);
+        $response->assertJsonPath('data.is_available', true);
+    }
+
     public function test_pending_expired_reservations_do_not_block(): void
     {
         $client = Client::factory()->create(['tenant_id' => $this->tenant->id]);
