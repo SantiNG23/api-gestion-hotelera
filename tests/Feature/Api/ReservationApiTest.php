@@ -1105,8 +1105,6 @@ class ReservationApiTest extends TestCase
      */
     public function test_reservation_client_relation_returns_null_when_client_soft_deleted(): void
     {
-        $this->markTestIncomplete('TODO: Validar Riesgo #11 - Relaciones BelongsTo sin withTrashed() devuelven null');
-
         // Crear una reserva con cliente
         $checkIn = Carbon::tomorrow();
         $checkOut = $checkIn->clone()->addDays(2);
@@ -1134,19 +1132,25 @@ class ReservationApiTest extends TestCase
         // Soft delete el cliente
         Client::find($clientId)->delete();
 
-        // Recargar la reserva: la relación debería devolver null porque Client está soft-deleted
+        // Recargar la reserva en API: debe conservar el cliente histórico para trazabilidad
         $reservationAfterDelete = Reservation::find($reservationId);
 
+        $showResponse = $this->getJson("/api/v1/reservations/{$reservationId}", $this->authHeaders());
+        $showResponse->assertStatus(200);
+        $showResponse->assertJsonPath('data.client.id', $clientId);
+        $showResponse->assertJsonPath('data.client.name', 'Client To Delete');
+
+        // La relación base sigue en null (solo activos)
         $this->assertNull(
             $reservationAfterDelete->client,
-            'BUG CONFIRMADO: relation()->client devuelve null cuando Client fue soft-deleted, perdiendo contexto histórico'
+            'La relación base client() no debe traer soft-deleted automáticamente'
         );
 
-        // El cliente PODRÍA ser recuperable si se usara withTrashed()
-        $clientViaWithTrashed = $reservationAfterDelete->client()->withTrashed()->first();
+        // La relación explícita histórica sí debe recuperarlo
+        $clientViaWithTrashed = $reservationAfterDelete->clientWithTrashed()->first();
         $this->assertNotNull(
             $clientViaWithTrashed,
-            'SOLUCIÓN PROPUESTA: withTrashed() recuperaría el cliente eliminado'
+            'La relación histórica debe recuperar el cliente eliminado lógicamente'
         );
     }
 

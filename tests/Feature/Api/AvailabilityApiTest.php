@@ -327,6 +327,30 @@ class AvailabilityApiTest extends TestCase
         $response->assertStatus(422);
     }
 
+    public function test_calendar_keeps_client_name_when_client_soft_deleted(): void
+    {
+        $client = Client::factory()->create(['tenant_id' => $this->tenant->id, 'name' => 'Cliente Hist']);
+
+        Reservation::factory()->confirmed()->create([
+            'tenant_id' => $this->tenant->id,
+            'client_id' => $client->id,
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::parse('2025-01-02'),
+            'check_out_date' => Carbon::parse('2025-01-05'),
+        ]);
+
+        $client->delete();
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/availability/calendar?'.http_build_query([
+                'from' => '2025-01-01',
+                'to' => '2025-01-05',
+            ]));
+
+        $this->assertApiResponse($response);
+        $response->assertJsonPath('data.cabins.0.reservations.0.client_name', 'Cliente Hist');
+    }
+
     public function test_blocked_ranges_requires_cabin(): void
     {
         $response = $this->withHeaders($this->authHeaders())
