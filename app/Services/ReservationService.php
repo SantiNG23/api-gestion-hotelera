@@ -33,7 +33,12 @@ class ReservationService extends Service
     public function getReservations(array $params): LengthAwarePaginator
     {
         $query = $this->model->query()
-            ->with(['client', 'cabin', 'guests', 'payments']);
+            ->with([
+                'client' => fn ($query) => $query->withTrashed(),
+                'cabin' => fn ($query) => $query->withTrashed(),
+                'guests',
+                'payments',
+            ]);
         $query = $this->getFilteredAndSorted($query, $params);
 
         return $this->getAll($params['page'], $params['per_page'], $query);
@@ -45,7 +50,12 @@ class ReservationService extends Service
     public function getReservation(int $id): Reservation
     {
         /** @var Reservation $reservation */
-        $reservation = $this->getByIdWith($id, ['client', 'cabin', 'cabin.features', 'guests', 'payments']);
+        $reservation = $this->getByIdWith($id, [
+            'client' => fn ($query) => $query->withTrashed(),
+            'cabin' => fn ($query) => $query->withTrashed()->with('features'),
+            'guests',
+            'payments',
+        ]);
 
         return $reservation;
     }
@@ -116,7 +126,11 @@ class ReservationService extends Service
                 $this->syncGuests($reservation, $data['guests']);
             }
 
-            $reservation = $reservation->load(['client', 'cabin', 'guests']);
+            $reservation = $reservation->load([
+                'client' => fn ($query) => $query->withTrashed(),
+                'cabin' => fn ($query) => $query->withTrashed(),
+                'guests',
+            ]);
 
             ReservationCreated::dispatch($reservation);
 
@@ -231,7 +245,12 @@ class ReservationService extends Service
                 $this->syncGuests($reservation, $data['guests']);
             }
 
-            return $reservation->fresh(['client', 'cabin', 'guests', 'payments']);
+            return $reservation->fresh([
+                'client' => fn ($query) => $query->withTrashed(),
+                'cabin' => fn ($query) => $query->withTrashed(),
+                'guests',
+                'payments',
+            ]);
         });
     }
 
@@ -272,7 +291,12 @@ class ReservationService extends Service
                 'pending_until' => null,
             ]);
 
-            return $reservation->fresh(['client', 'cabin', 'guests', 'payments']);
+            return $reservation->fresh([
+                'client' => fn ($query) => $query->withTrashed(),
+                'cabin' => fn ($query) => $query->withTrashed(),
+                'guests',
+                'payments',
+            ]);
         });
     }
 
@@ -309,7 +333,12 @@ class ReservationService extends Service
                 'paid_at' => $paymentData['paid_at'] ?? now(),
             ]);
 
-            return $reservation->fresh(['client', 'cabin', 'guests', 'payments']);
+            return $reservation->fresh([
+                'client' => fn ($query) => $query->withTrashed(),
+                'cabin' => fn ($query) => $query->withTrashed(),
+                'guests',
+                'payments',
+            ]);
         });
     }
 
@@ -336,7 +365,12 @@ class ReservationService extends Service
             ]);
 
             /** @var Reservation $freshReservation */
-            $freshReservation = $reservation->fresh(['client', 'cabin', 'guests', 'payments']);
+            $freshReservation = $reservation->fresh([
+                'client' => fn ($query) => $query->withTrashed(),
+                'cabin' => fn ($query) => $query->withTrashed(),
+                'guests',
+                'payments',
+            ]);
 
             return $freshReservation;
         }
@@ -358,7 +392,12 @@ class ReservationService extends Service
             ]);
 
             /** @var Reservation $freshReservation */
-            $freshReservation = $reservation->fresh(['client', 'cabin', 'guests', 'payments']);
+            $freshReservation = $reservation->fresh([
+                'client' => fn ($query) => $query->withTrashed(),
+                'cabin' => fn ($query) => $query->withTrashed(),
+                'guests',
+                'payments',
+            ]);
 
             return $freshReservation;
         });
@@ -384,7 +423,12 @@ class ReservationService extends Service
         ]);
 
         /** @var Reservation $freshReservation */
-        $freshReservation = $reservation->fresh(['client', 'cabin', 'guests', 'payments']);
+        $freshReservation = $reservation->fresh([
+            'client' => fn ($query) => $query->withTrashed(),
+            'cabin' => fn ($query) => $query->withTrashed(),
+            'guests',
+            'payments',
+        ]);
 
         return $freshReservation;
     }
@@ -416,7 +460,12 @@ class ReservationService extends Service
         ]);
 
         /** @var Reservation $freshReservation */
-        $freshReservation = $reservation->fresh(['client', 'cabin', 'guests', 'payments']);
+        $freshReservation = $reservation->fresh([
+            'client' => fn ($query) => $query->withTrashed(),
+            'cabin' => fn ($query) => $query->withTrashed(),
+            'guests',
+            'payments',
+        ]);
 
         return $freshReservation;
     }
