@@ -30,7 +30,7 @@ Puntos aun abiertos o que requieren decision funcional:
 
 1. Pendiente — definir la politica de reutilizacion de `dni` cuando un cliente fue soft-deleted.
 2. Pendiente — decidir si la reserva puede seguir sobreescribiendo datos del cliente por coincidencia de `dni`.
-3. Pendiente — preservar mejor trazabilidad historica en reservas mediante relaciones `client`/`cabin` compatibles con soft delete.
+3. Pendiente parcial — definir alcance exacto de consumo de relaciones activas vs historicas (`withTrashed`) en busquedas/listados secundarios.
 4. Pendiente — implementar o remover listeners placeholder de onboarding y confirmacion de reservas.
 
 ## Estado general
@@ -39,6 +39,7 @@ Puntos aun abiertos o que requieren decision funcional:
 - Los modulos con mayor madurez funcional son `reservas_y_operacion` y `tarifas_y_precios`, pero tambien concentran los riesgos mas importantes.
 - El sistema implementa multitenancy en gran parte del dominio mediante `BelongsToTenant`, aunque hay huecos de validacion cross-tenant en algunos flujos.
 - Hay varias reglas de negocio ya codificadas que conviene formalizar porque hoy existen mas por implementacion que por documentacion.
+- El foco P1 de trazabilidad historica en reservas quedo mitigado con estrategia A+B minima: relaciones historicas explicitas + carga selectiva con `withTrashed` en servicios criticos.
 
 ## Resumen por modulo
 
@@ -50,6 +51,7 @@ Puntos aun abiertos o que requieren decision funcional:
 - Hallazgos clave:
   - crear/editar reservas puede sobreescribir datos del cliente si coincide el DNI;
   - un cliente borrado logicamente sigue reteniendo su DNI por la restriccion unica;
+  - el historial cargado desde clientes ahora preserva cabañas soft-deleted en reservas relacionadas;
   - faltan tests de tenant isolation, validaciones finas y filtros no cubiertos.
 - Lectura general: modulo estable, pero con riesgos de trazabilidad e integridad historica.
 
@@ -60,7 +62,7 @@ Puntos aun abiertos o que requieren decision funcional:
 - Testing ejecutado por modulo: `82` tests OK, `339` assertions.
 - Hallazgos clave:
   - las validaciones tenant-aware principales ya quedaron alineadas con el codigo actual;
-  - sigue habiendo riesgo de trazabilidad si una reserva referencia cliente/cabaña soft-deleted y luego se consume desde disponibilidad;
+  - disponibilidad/calendario ya cargan relaciones historicas de reserva (`client`/`cabin`) con `withTrashed` y fallback seguro;
   - faltan tests de relaciones cross-tenant historicas y del endpoint `GET /features/{id}`.
 - Lectura general: modulo robusto en CRUD y operaciones basicas; la deuda principal ya no esta en validaciones tenant-aware sino en trazabilidad historica y cobertura complementaria.
 
@@ -84,7 +86,7 @@ Puntos aun abiertos o que requieren decision funcional:
   - existe tension conceptual entre `cancel` y `delete`;
   - `calculate-price`, `quote`, `store` y `update` ya comparten validacion uniforme de capacidad maxima;
   - una reserva/cotizacion normal sin tarifa configurada ahora responde `422`, mientras que el precio `0` queda reservado a bloqueos;
-  - la trazabilidad historica pierde contexto cuando cliente o cabaña asociados fueron soft-deleted.
+  - la trazabilidad historica de cliente/cabaña en endpoints operativos principales fue corregida con carga selectiva de soft-deleted.
 - Lectura general: es el corazon del negocio y el modulo mas solido en cobertura; los riesgos vigentes ya no pasan por `is_blocked` o `pending_until`, sino por consistencia de reglas y trazabilidad historica.
 
 ### 5. `acceso_y_perfil_de_usuario`
@@ -112,13 +114,13 @@ Puntos aun abiertos o que requieren decision funcional:
 ### Riesgo alto
 
 - Ambiguedad operativa en clientes por reutilizacion de DNI con soft delete.
-- Perdida de trazabilidad historica cuando cliente/cabaña relacionados fueron soft-deleted.
 
 ### Riesgo medio
 
 - Actualizacion automatica de datos del cliente por coincidencia de DNI desde reservas.
 - Listeners registrados pero sin efecto funcional real.
 - Semantica operativa mezclada en `expiring_pending` y deuda de definicion en el endpoint dual `POST /auth`.
+- Alcance pendiente de documentacion sobre donde usar relaciones activas vs historicas en consultas secundarias.
 
 ### Riesgo bajo
 
@@ -140,9 +142,14 @@ El siguiente backlog refleja que los tres P0 originales ya quedaron resueltos en
 
 | Prioridad | Tema | Modulos | Tipo | Por que sigue |
 | --- | --- | --- | --- | --- |
-| P1 | Preservar trazabilidad historica de reservas cuando cliente/cabaña fueron soft-deleted | `reservas_y_operacion`, `clientes`, `cabanas_y_caracteristicas` | Integridad historica | La operacion diaria y los historiales pueden perder contexto o romperse cuando relaciones blandamente eliminadas pasan a `null`. |
 | P1 | Implementar o desactivar listeners placeholder de onboarding y confirmacion de reservas | `acceso_y_perfil_de_usuario`, `reservas_y_operacion` | Consistencia tecnica | Hoy existen listeners registrados cuyo nombre promete side effects reales, pero su implementacion actual es vacia o solo loguea. |
 | P1 | Corregir cobertura faltante de endpoints y escenarios historicos | transversal | Calidad / testing | Aun faltan pruebas directas para `cancel`, `GET /features/{id}` y escenarios con entidades soft-deleted o decisiones funcionales pendientes sobre clientes. |
+
+### P1 — resuelto en este branch
+
+| Prioridad | Tema | Modulos | Tipo | Evidencia |
+| --- | --- | --- | --- | --- |
+| P1 | Preservar trazabilidad historica de reservas cuando cliente/cabaña fueron soft-deleted | `reservas_y_operacion`, `clientes`, `cabanas_y_caracteristicas` | Integridad historica | Se agregaron relaciones historicas explicitas en `Reservation` y carga selectiva con `withTrashed` en `ReservationService`, `AvailabilityService`, `DailySummaryService` y `ClientService`; se agregaron tests de API/modelo para escenarios soft-deleted. |
 
 ### P2 — requiere decision funcional antes de tocar codigo
 
@@ -163,9 +170,9 @@ El siguiente backlog refleja que los tres P0 originales ya quedaron resueltos en
 
 ### Orden recomendado de ejecucion
 
-1. Trazabilidad historica con relaciones soft-deleted.
-2. Limpieza o implementacion real de listeners placeholder.
-3. Definiciones funcionales sobre `dni`, sobreescritura de clientes y contrato de auth.
+1. Limpieza o implementacion real de listeners placeholder.
+2. Definiciones funcionales sobre `dni`, sobreescritura de clientes y contrato de auth.
+3. Completar cobertura faltante en `cancel`, `GET /features/{id}` y escenarios de tenants cruzados.
 
 ## Documentos originales
 

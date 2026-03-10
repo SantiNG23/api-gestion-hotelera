@@ -19,6 +19,7 @@ Tras contrastar el reporte original con el codigo actual, se confirma que los si
 5. Resuelto — la seleccion de tarifa usada por reservas/cotizaciones ya consume una logica mas consistente desde `PriceRangeService`.
 6. Resuelto — `calculate-price`, `quote`, `store` y `update` ya comparten validacion uniforme de capacidad maxima de cabaña.
 7. Resuelto — si falta configuracion tarifaria en una reserva/cotizacion normal, el flujo responde `422`; el precio `0` queda reservado a bloqueos.
+8. Resuelto — trazabilidad historica de `client`/`cabin` preservada en endpoints operativos clave mediante carga selectiva con `withTrashed`.
 
 Nota operativa: los riesgos vigentes del modulo ya no pasan por `is_blocked`, `pending_until` o scheduler, sino por consistencia de reglas de negocio, trazabilidad historica y señalizacion de errores operativos.
 
@@ -143,21 +144,20 @@ Nota operativa: los riesgos vigentes del modulo ya no pasan por `is_blocked`, `p
 
 - no hay prueba HTTP directa para `POST /api/v1/reservations/{id}/cancel`
 - el test llamado “cancel reservation success” sigue probando `DELETE /reservations/{id}`, no `POST /cancel`
-- no hay prueba de escenarios historicos con `client` o `cabin` soft-deleted
+- no hay prueba directa de `daily-summary` en escenario con `client`/`cabin` soft-deleted
 
 ## Hallazgos/Riesgos vigentes
 
-### 1. Trazabilidad historica incompleta si cliente o cabaña fueron soft-deleted
+### 1. Trazabilidad historica principal: mitigada con estrategia selectiva
 
-Ubicacion: `app/Models/Reservation.php` y `app/Services/AvailabilityService.php`
+Ubicacion: `app/Models/Reservation.php`, `app/Services/ReservationService.php`, `app/Services/AvailabilityService.php`, `app/Services/DailySummaryService.php`, `app/Services/ClientService.php`
 
-Las relaciones `Reservation -> client` y `Reservation -> cabin` no usan `withTrashed()`, y el calendario operacional asume que `reservation->client->name` siempre existe.
+Se agregaron relaciones historicas explicitas (`clientWithTrashed`, `cabinWithTrashed`) y los servicios operativos principales ahora cargan `client`/`cabin` con `withTrashed` donde corresponde. En calendario tambien se aplico fallback null-safe para `client_name`.
 
-Impacto:
+Estado:
 
-- reservas historicas pueden perder contexto;
-- el calendario puede mostrar vacios o fallar ante relaciones nulas;
-- el historial operativo se vuelve menos confiable.
+- mitigado para endpoints operativos principales de reservas, disponibilidad y resumen diario;
+- pendiente de documentar explicitamente en que consultas secundarias debe usarse relacion activa vs historica.
 
 ### 2. `expiring_pending` mezcla alertas operativas de distinta naturaleza
 
@@ -184,8 +184,8 @@ El dominio distingue entre cancelar por estado y eliminar logicamente el registr
 
 ## Recomendaciones
 
-1. **Preservar trazabilidad historica de relaciones**
-   Evaluar `withTrashed()` en relaciones de `Reservation` y endurecer `AvailabilityService` frente a relaciones nulas.
+1. **Formalizar politica de uso de relaciones activas vs historicas**
+   Documentar en que endpoints se usa carga historica (`withTrashed`) y donde debe mantenerse relacion activa.
 
 2. **Separar alertas del resumen diario**
    Dividir `expiring_pending` en categorias operativas distintas si el frontend necesita acciones diferentes.

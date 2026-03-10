@@ -23,6 +23,8 @@ Tras contrastar este reporte con el codigo actual, se confirma que los siguiente
 
 Nota operativa: este modulo contenia varios hallazgos historicos que quedaron desactualizados. Las secciones siguientes fueron ajustadas para dejar solo deuda vigente o decisiones de diseño aun abiertas.
 
+Sin cambios directos en este modulo en la ultima tanda de implementacion (trazabilidad historica), por lo que este reporte se mantiene funcionalmente vigente.
+
 ## Archivos clave
 
 ### Endpoints

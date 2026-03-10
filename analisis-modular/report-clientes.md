@@ -240,18 +240,16 @@ Ubicacion: `app/Models/Model.php:14` (`use SoftDeletes` en el modelo base), migr
 
 El modelo base usa `SoftDeletes`. Al eliminar un cliente, el registro queda en la tabla con `deleted_at` no nulo. El indice unico compuesto `(tenant_id, dni)` no excluye registros con soft delete, por lo que ese DNI queda bloqueado. No es posible crear otro cliente con el mismo DNI sin restaurar el registro eliminado o modificar la restriccion de base de datos.
 
-**3. Relacion `Reservation -> client` sin `withTrashed()`**
+**3. Relacion base `Reservation -> client` sin `withTrashed()` (complementada con relacion historica)**
 
-Ubicacion: `app/Models/Reservation.php:62`
+Ubicacion: `app/Models/Reservation.php`
 
-```php
-public function client(): BelongsTo
-{
-    return $this->belongsTo(Client::class);
-}
-```
+La relacion activa `client()` se mantiene sin `withTrashed()` por diseño. Para trazabilidad se agrego `clientWithTrashed()` y los servicios operativos principales ya cargan `client` con `withTrashed` de forma selectiva.
 
-Si un cliente es eliminado (soft delete), cualquier reserva que lo referencie devolvera `client: null` al cargar la relacion. Esto afecta el historial de reservas, reportes y cualquier vista que asuma que una reserva tiene cliente.
+Impacto actual:
+
+- mitigado en endpoints operativos de reservas/disponibilidad/resumen;
+- pendiente de documentar claramente en que consultas secundarias se usa relacion activa vs historica.
 
 **4. Manejo de errores no uniforme en `ClientController`**
 
@@ -402,7 +400,7 @@ El filtro `global` en listado de clientes busca en múltiples campos (`name`, `d
 - Priorizar cobertura de tenant isolation y de reglas de validacion.
 - Definir formalmente la politica de reutilizacion de DNI tras soft delete; considerar excluir registros con `deleted_at` del indice unico o usar un campo de estado separado.
 - Revisar si la actualizacion automatica del cliente por DNI desde reservas (`resolveClient`) es deseada o si requiere confirmacion/auditoria antes de sobreescribir datos.
-- Agregar `withTrashed()` en `Reservation::client()` si se necesita trazabilidad historica de clientes eliminados.
+- Mantener `Reservation::client()` como relacion activa y usar `clientWithTrashed()` en endpoints que requieren trazabilidad historica.
 - Uniformar el manejo de errores en `ClientController`: agregar `try/catch` en `show()`, `update()`, `destroy()` y `searchByDni()` o mover el manejo al handler global de forma consistente.
 - Proteger `resolveClient()` con una verificacion explicita de tenant antes de la busqueda, para no depender exclusivamente del scope global en contextos donde `Auth::check()` puede ser falso (colas, comandos artisan).
 - Documentar oficialmente el concepto de cliente tecnico de bloqueo como parte del dominio.

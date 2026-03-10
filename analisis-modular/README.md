@@ -1,8 +1,12 @@
 # Analisis modular de `api-miradordeluz`
 
-Fecha de generacion: 2026-03-09
+Fecha de generacion: 2026-03-10
 
-Este directorio conserva los reportes originales por modulo y un resumen consolidado.
+Este directorio conserva los reportes modulares vigentes y un resumen consolidado.
+
+Actualizacion relevante 2026-03-10:
+
+- Se actualizo todo el set de reportes tras implementar la mitigacion de trazabilidad historica en reservas/disponibilidad/resumen diario con estrategia selectiva (relaciones historicas explicitas + carga `withTrashed` en servicios criticos).
 
 ## Archivos
 

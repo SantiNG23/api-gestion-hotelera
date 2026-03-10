@@ -152,28 +152,27 @@ php artisan test tests/Feature/Api/PriceCalculatorApiTest.php tests/Unit/Service
 
 ## Hallazgos/Riesgos vigentes
 
-### 1. Relaciones historicas de reservas con `cabin` no preservan soft-deleted
+### 1. Relaciones historicas de reservas con `cabin`: mitigado en flujos principales
 
-Ubicacion: `app/Models/Reservation.php:62-72`
+Ubicacion: `app/Models/Reservation.php`, `app/Services/ReservationService.php`, `app/Services/AvailabilityService.php`, `app/Services/DailySummaryService.php`, `app/Services/ClientService.php`
 
-La relacion `Reservation -> cabin` sigue sin `withTrashed()`. Si una cabaña es eliminada logicamente, las reservas historicas pueden devolver `cabin: null` al cargar la relacion.
-
-Impacto:
-
-- perdida de contexto en historiales y listados;
-- riesgo de errores o datos vacios en endpoints que esperan nombre/capacidad de la cabaña;
-- trazabilidad historica incompleta.
-
-### 2. `AvailabilityService` asume que `reservation->client` siempre existe
-
-Ubicacion: `app/Services/AvailabilityService.php:71-132`
-
-El calendario usa `reservation->client->name` sin fallback. Si el cliente fue soft-deleted y la relacion devuelve `null`, el endpoint de calendario puede quedar inconsistente o incluso fallar segun el caso.
+La relacion activa `cabin()` se mantiene sin `withTrashed()` por diseño. Se agrego `cabinWithTrashed()` y los servicios principales cargan `cabin` con `withTrashed` en endpoints operativos donde importa trazabilidad.
 
 Impacto:
 
-- el calendario operativo puede mostrar vacios o romperse con reservas historicas;
-- el problema no esta en disponibilidad base, sino en la trazabilidad de relaciones blandamente eliminadas.
+- mitigado en reservas, disponibilidad y resumen diario para casos operativos principales;
+- pendiente de documentar alcance en consultas secundarias que deban seguir usando solo relaciones activas.
+
+### 2. `AvailabilityService` en calendario ya no asume que `reservation->client` siempre existe
+
+Ubicacion: `app/Services/AvailabilityService.php`
+
+El calendario fue endurecido con null-safe y fallback (`client_name`), ademas de cargar relaciones con `withTrashed` para preservar contexto en escenarios de soft-delete.
+
+Impacto:
+
+- riesgo de falla por null dereference mitigado;
+- pendiente menor: documentar contrato esperado de `client_name` cuando realmente no exista relacion recuperable.
 
 ### 3. La cobertura todavia no protege bien escenarios historicos
 
@@ -186,8 +185,8 @@ Siguen faltando tests para:
 
 ## Recomendaciones
 
-1. **Agregar `withTrashed()` donde la trazabilidad historica lo requiera**
-   Especialmente en relaciones de `Reservation` hacia `Cabin` y, si aplica, hacia `Client`.
+1. **Mantener estrategia selectiva de trazabilidad historica**
+   Conservar relaciones activas por defecto y usar carga historica (`withTrashed`) solo en endpoints operativos que la necesitan.
 
 2. **Hacer robusto el calendario frente a relaciones nulas**
    En `AvailabilityService`, usar null-safe access o datos cacheados si el cliente/cabaña originales pueden haber sido eliminados logicamente.

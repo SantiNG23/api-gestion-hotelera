@@ -19,6 +19,8 @@ Tras contrastar el reporte original con el codigo actual, se confirma que los si
 
 Nota operativa: el mayor riesgo del modulo ya no es la divergencia entre algoritmos ni el fallback silencioso a `0`, sino los solapamientos creados desde el CRUD simple y la claridad semantica entre endpoints orientativos y de reserva real.
 
+Sin cambios directos en este modulo en la ultima tanda de implementacion (trazabilidad historica), por lo que este reporte se mantiene funcionalmente vigente.
+
 ## Archivos clave
 
 ### Rutas y endpoints
