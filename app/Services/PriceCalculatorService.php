@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\Cabin;
 use App\Models\CabinPriceByGuests;
 use App\Models\PriceGroup;
 use App\Models\PriceRange;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Servicio utilitario para calcular precios de reservas
@@ -17,9 +19,29 @@ use Carbon\CarbonPeriod;
  */
 class PriceCalculatorService
 {
+    private const MISSING_TARIFF_MESSAGE = 'No hay configuración tarifaria para la cabaña \'%s\' en las fechas y cantidad de huéspedes seleccionadas.';
+
     public function __construct(
         private readonly PriceRangeService $priceRangeService
     ) {}
+
+    /**
+     * Calcula un precio apto para una reserva/cotización normal.
+     *
+     * @return array{total: float, deposit: float, balance: float, nights: int, breakdown: array}
+     *
+     * @throws ValidationException
+     */
+    public function calculateReservablePrice(Carbon $checkIn, Carbon $checkOut, Cabin $cabin, int $numGuests): array
+    {
+        $this->ensureGuestCapacityFitsCabin($cabin, $numGuests);
+
+        $priceDetails = $this->calculatePrice($checkIn, $checkOut, $cabin->id, $numGuests);
+
+        $this->ensureTariffIsConfigured($cabin, $priceDetails);
+
+        return $priceDetails;
+    }
 
     /**
      * Calcula el precio total y el desglose por noche
@@ -184,5 +206,65 @@ class PriceCalculatorService
             'nights' => (int) $priceDetails['nights'],
             'breakdown' => $priceDetails['breakdown'],
         ];
+    }
+
+    /**
+     * Genera una cotización válida para reservas normales.
+     *
+     * @return array{cabin_id: int, check_in: string, check_out: string, total: float, deposit: float, balance: float, nights: int, breakdown: array}
+     *
+     * @throws ValidationException
+     */
+    public function generateReservableQuote(Cabin $cabin, string $checkIn, string $checkOut, int $numGuests): array
+    {
+        $checkInDate = Carbon::parse($checkIn);
+        $checkOutDate = Carbon::parse($checkOut);
+
+        $priceDetails = $this->calculateReservablePrice($checkInDate, $checkOutDate, $cabin, $numGuests);
+
+        return [
+            'cabin_id' => $cabin->id,
+            'check_in' => $checkIn,
+            'check_out' => $checkOut,
+            'total' => (float) $priceDetails['total'],
+            'deposit' => (float) $priceDetails['deposit'],
+            'balance' => (float) $priceDetails['balance'],
+            'nights' => (int) $priceDetails['nights'],
+            'breakdown' => $priceDetails['breakdown'],
+        ];
+    }
+
+    /**
+     * @throws ValidationException
+     */
+    public function ensureGuestCapacityFitsCabin(Cabin $cabin, int $numGuests): void
+    {
+        if ($numGuests <= $cabin->capacity) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'num_guests' => ["La cabaña '{$cabin->name}' tiene capacidad para {$cabin->capacity} personas máximo"],
+        ]);
+    }
+
+    /**
+     * @param  array{total: float, deposit: float, balance: float, nights: int, breakdown: array}  $priceDetails
+     *
+     * @throws ValidationException
+     */
+    private function ensureTariffIsConfigured(Cabin $cabin, array $priceDetails): void
+    {
+        if (($priceDetails['nights'] ?? 0) < 1) {
+            return;
+        }
+
+        if ((float) ($priceDetails['total'] ?? 0) > 0) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'pricing' => [sprintf(self::MISSING_TARIFF_MESSAGE, $cabin->name)],
+        ]);
     }
 }

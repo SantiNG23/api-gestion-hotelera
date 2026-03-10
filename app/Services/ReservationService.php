@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Events\ReservationCreated;
+use App\Models\Cabin;
 use App\Models\Client;
 use App\Models\Reservation;
 use App\Models\ReservationPayment;
@@ -43,7 +44,10 @@ class ReservationService extends Service
      */
     public function getReservation(int $id): Reservation
     {
-        return $this->getByIdWith($id, ['client', 'cabin', 'cabin.features', 'guests', 'payments']);
+        /** @var Reservation $reservation */
+        $reservation = $this->getByIdWith($id, ['client', 'cabin', 'cabin.features', 'guests', 'payments']);
+
+        return $reservation;
     }
 
     /**
@@ -55,6 +59,7 @@ class ReservationService extends Service
     {
         $checkIn = Carbon::parse($data['check_in_date']);
         $checkOut = Carbon::parse($data['check_out_date']);
+        $cabin = Cabin::findOrFail((int) $data['cabin_id']);
 
         // Validar disponibilidad
         if (! $this->availabilityService->isAvailable($data['cabin_id'], $checkIn, $checkOut)) {
@@ -67,9 +72,11 @@ class ReservationService extends Service
         $isBlocked = (bool) ($data['is_blocked'] ?? false);
         $numGuests = (int) ($data['num_guests'] ?? 2);
 
+        $this->priceCalculator->ensureGuestCapacityFitsCabin($cabin, $numGuests);
+
         $priceDetails = $isBlocked
             ? ['total' => 0, 'deposit' => 0, 'balance' => 0]
-            : $this->priceCalculator->calculatePrice($checkIn, $checkOut, (int) $data['cabin_id'], $numGuests);
+            : $this->priceCalculator->calculateReservablePrice($checkIn, $checkOut, $cabin, $numGuests);
 
         return DB::transaction(function () use ($data, $priceDetails, $isBlocked, $numGuests) {
             $tenantId = $data['tenant_id'] ?? Auth::user()->tenant_id;
@@ -87,6 +94,7 @@ class ReservationService extends Service
                 $data['client'] ?? null
             );
 
+            /** @var Reservation $reservation */
             $reservation = $this->create([
                 'tenant_id' => $tenantId,
                 'client_id' => $client->id,
@@ -123,6 +131,7 @@ class ReservationService extends Service
      */
     public function updateReservation(int $id, array $data): Reservation
     {
+        /** @var Reservation $reservation */
         $reservation = $this->getById($id);
 
         // No permitir editar reservas finalizadas o canceladas
@@ -146,6 +155,9 @@ class ReservationService extends Service
             $isBlocked = (bool) ($data['is_blocked'] ?? $reservation->is_blocked);
             $numGuests = (int) ($data['num_guests'] ?? $reservation->num_guests ?? 2);
             $numGuests = max(1, $numGuests);
+            $cabin = Cabin::findOrFail((int) $cabinId);
+
+            $this->priceCalculator->ensureGuestCapacityFitsCabin($cabin, $numGuests);
 
             // Validar disponibilidad (excluyendo la reserva actual)
             if (! $this->availabilityService->isAvailable((int) $cabinId, $checkIn, $checkOut, $reservation->id)) {
@@ -157,13 +169,16 @@ class ReservationService extends Service
             // Si está bloqueada, precios en 0; si no, calcular normalmente
             $priceDetails = $isBlocked
                 ? ['total' => 0, 'deposit' => 0, 'balance' => 0]
-                : $this->priceCalculator->calculatePrice($checkIn, $checkOut, (int) $cabinId, $numGuests);
+                : $this->priceCalculator->calculateReservablePrice($checkIn, $checkOut, $cabin, $numGuests);
 
             $data['total_price'] = $priceDetails['total'];
             $data['deposit_amount'] = $priceDetails['deposit'];
             $data['balance_amount'] = $priceDetails['balance'];
             $data['is_blocked'] = $isBlocked;
             $data['num_guests'] = $numGuests;
+            $data['pending_until'] = $isBlocked
+                ? null
+                : Carbon::now()->addHours((int) ($data['pending_hours'] ?? 48));
 
             // Si es un bloqueo, forzar el cliente técnico de bloqueo
             if ($isBlocked) {
@@ -186,7 +201,7 @@ class ReservationService extends Service
 
         return DB::transaction(function () use ($reservation, $data) {
             // Actualizar campos permitidos
-            $updateData = array_filter([
+            $rawUpdateData = [
                 'client_id' => $data['client_id'] ?? null,
                 'cabin_id' => $data['cabin_id'] ?? null,
                 'num_guests' => $data['num_guests'] ?? null,
@@ -195,9 +210,17 @@ class ReservationService extends Service
                 'total_price' => $data['total_price'] ?? null,
                 'deposit_amount' => $data['deposit_amount'] ?? null,
                 'balance_amount' => $data['balance_amount'] ?? null,
+                'pending_until' => array_key_exists('pending_until', $data) ? $data['pending_until'] : null,
                 'notes' => $data['notes'] ?? null,
                 'is_blocked' => $data['is_blocked'] ?? null,
-            ], fn ($value) => $value !== null);
+            ];
+
+            $updateData = [];
+            foreach ($rawUpdateData as $field => $value) {
+                if ($value !== null || ($field === 'pending_until' && array_key_exists('pending_until', $data))) {
+                    $updateData[$field] = $value;
+                }
+            }
 
             if (! empty($updateData)) {
                 $reservation->update($updateData);
@@ -312,7 +335,10 @@ class ReservationService extends Service
                 'status' => Reservation::STATUS_CHECKED_IN,
             ]);
 
-            return $reservation->fresh(['client', 'cabin', 'guests', 'payments']);
+            /** @var Reservation $freshReservation */
+            $freshReservation = $reservation->fresh(['client', 'cabin', 'guests', 'payments']);
+
+            return $freshReservation;
         }
 
         // Si no, registrar el pago de saldo al momento del check-in
@@ -331,7 +357,10 @@ class ReservationService extends Service
                 'status' => Reservation::STATUS_CHECKED_IN,
             ]);
 
-            return $reservation->fresh(['client', 'cabin', 'guests', 'payments']);
+            /** @var Reservation $freshReservation */
+            $freshReservation = $reservation->fresh(['client', 'cabin', 'guests', 'payments']);
+
+            return $freshReservation;
         });
     }
 
@@ -354,7 +383,10 @@ class ReservationService extends Service
             'status' => Reservation::STATUS_FINISHED,
         ]);
 
-        return $reservation->fresh(['client', 'cabin', 'guests', 'payments']);
+        /** @var Reservation $freshReservation */
+        $freshReservation = $reservation->fresh(['client', 'cabin', 'guests', 'payments']);
+
+        return $freshReservation;
     }
 
     /**
@@ -383,7 +415,10 @@ class ReservationService extends Service
             'pending_until' => null,
         ]);
 
-        return $reservation->fresh(['client', 'cabin', 'guests', 'payments']);
+        /** @var Reservation $freshReservation */
+        $freshReservation = $reservation->fresh(['client', 'cabin', 'guests', 'payments']);
+
+        return $freshReservation;
     }
 
     /**
@@ -431,11 +466,12 @@ class ReservationService extends Service
     {
         $checkInDate = Carbon::parse($checkIn);
         $checkOutDate = Carbon::parse($checkOut);
+        $cabin = Cabin::findOrFail($cabinId);
 
         // Verificar disponibilidad
         $isAvailable = $this->availabilityService->isAvailable($cabinId, $checkInDate, $checkOutDate);
 
-        $quote = $this->priceCalculator->generateQuote($cabinId, $checkIn, $checkOut, $numGuests);
+        $quote = $this->priceCalculator->generateReservableQuote($cabin, $checkIn, $checkOut, $numGuests);
         $quote['is_available'] = $isAvailable;
 
         return $quote;

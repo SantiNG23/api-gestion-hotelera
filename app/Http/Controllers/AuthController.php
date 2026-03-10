@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Requests\AuthRequest;
+use App\Http\Resources\AuthResource;
+use App\Http\Resources\UserResource;
 use App\Services\AuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,7 +26,7 @@ class AuthController extends Controller
         $isNew = $user->wasRecentlyCreated;
 
         return $this->successResponse(
-            $this->transformResource($user),
+            new AuthResource($user),
             $isNew ? 'Usuario registrado exitosamente' : 'Usuario autenticado exitosamente',
             $isNew ? 201 : 200
         );
@@ -46,7 +48,7 @@ class AuthController extends Controller
     public function show(Request $request): JsonResponse
     {
         return $this->successResponse(
-            $this->transformResource($request->user()),
+            new UserResource($request->user()),
             'Usuario obtenido exitosamente'
         );
     }

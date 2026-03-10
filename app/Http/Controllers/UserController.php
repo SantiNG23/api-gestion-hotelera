@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Requests\UserRequest;
+use App\Http\Resources\UserResource;
 use App\Services\UserService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,7 +22,7 @@ class UserController extends Controller
     public function profile(Request $request): JsonResponse
     {
         return $this->successResponse(
-            $this->transformResource($request->user()),
+            new UserResource($request->user()),
             'Perfil obtenido exitosamente'
         );
     }
@@ -34,7 +35,7 @@ class UserController extends Controller
         $user = $this->userService->updateProfile($request->user(), $request->validated());
 
         return $this->successResponse(
-            $this->transformResource($user),
+            new UserResource($user),
             'Perfil actualizado exitosamente'
         );
     }
