@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Listeners;
 
 use App\Events\UserRegistered;
+use App\Mail\WelcomeUserMail;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Mail;
@@ -28,8 +29,6 @@ class SendWelcomeEmail implements ShouldQueue
      */
     public function handle(UserRegistered $event): void
     {
-        // Aquí iría la lógica para enviar el email de bienvenida
-        // Por ahora solo simulamos el envío
-        Mail::fake();
+        Mail::to($event->user)->queue(new WelcomeUserMail($event->user));
     }
 }
