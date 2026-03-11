@@ -29,6 +29,8 @@ class SendWelcomeEmail implements ShouldQueue
      */
     public function handle(UserRegistered $event): void
     {
+        // TODO(MVP+): reemplazar este welcome email por flujo de invitacion segura
+        // con magic link de primer acceso + definicion de contraseña para cuentas internas.
         Mail::to($event->user)->queue(new WelcomeUserMail($event->user));
     }
 }
