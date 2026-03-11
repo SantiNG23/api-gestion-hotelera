@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Listeners;
 
 use App\Events\UserRegistered;
+use App\Models\UserSetting;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 
@@ -27,7 +28,15 @@ class CreateInitialUserSettings implements ShouldQueue
      */
     public function handle(UserRegistered $event): void
     {
-        // Aquí iría la lógica para crear las configuraciones iniciales del usuario
-        // Por ejemplo, preferencias de notificación, tema, etc.
+        UserSetting::query()->firstOrCreate(
+            ['user_id' => $event->user->id],
+            [
+                'tenant_id' => $event->user->tenant_id,
+                'locale' => 'es_AR',
+                'timezone' => 'America/Argentina/Buenos_Aires',
+                'marketing_emails' => false,
+                'transactional_emails' => true,
+            ]
+        );
     }
 }
