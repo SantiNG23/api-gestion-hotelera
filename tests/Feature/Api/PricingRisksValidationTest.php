@@ -104,6 +104,54 @@ class PricingRisksValidationTest extends TestCase
         ]);
     }
 
+    public function test_cabin_price_request_accepts_same_tenant_relations_for_create_and_update(): void
+    {
+        $createResponse = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/v1/cabin-prices-by-guests', [
+                'cabin_id' => $this->cabin->id,
+                'price_group_id' => $this->priceGroup->id,
+                'num_guests' => 2,
+                'price_per_night' => 100,
+            ]);
+
+        $createResponse->assertCreated()
+            ->assertJsonPath('data.cabin_id', $this->cabin->id)
+            ->assertJsonPath('data.price_group_id', $this->priceGroup->id);
+
+        $priceId = (int) $createResponse->json('data.id');
+
+        $this->assertDatabaseHas('cabin_price_by_guests', [
+            'id' => $priceId,
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'price_group_id' => $this->priceGroup->id,
+            'num_guests' => 2,
+            'price_per_night' => 100,
+        ]);
+
+        $updateResponse = $this->withHeaders($this->authHeaders())
+            ->putJson("/api/v1/cabin-prices-by-guests/{$priceId}", [
+                'cabin_id' => $this->cabin->id,
+                'price_group_id' => $this->priceGroup->id,
+                'num_guests' => 3,
+                'price_per_night' => 140,
+            ]);
+
+        $updateResponse->assertOk()
+            ->assertJsonPath('data.id', $priceId)
+            ->assertJsonPath('data.num_guests', 3)
+            ->assertJsonPath('data.price_per_night', 140.0);
+
+        $this->assertDatabaseHas('cabin_price_by_guests', [
+            'id' => $priceId,
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'price_group_id' => $this->priceGroup->id,
+            'num_guests' => 3,
+            'price_per_night' => 140,
+        ]);
+    }
+
     /**
      * Riesgo 9: Soft delete bloquea índice único en CabinPriceByGuests
      *
