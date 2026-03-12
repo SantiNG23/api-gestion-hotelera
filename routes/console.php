@@ -11,4 +11,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('observability:purge-frontend-logs')->dailyAt('02:00');
-Schedule::command('reservations:cancel-expired')->hourly();
+Schedule::command('reservations:cancel-expired --all-tenants')->hourly();
