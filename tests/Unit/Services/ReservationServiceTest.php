@@ -239,7 +239,10 @@ class ReservationServiceTest extends TestCase
         $this->assertEquals(150, $reservation->deposit_amount); // 50%
         $this->assertEquals(150, $reservation->balance_amount); // 50%
         $this->assertFalse($reservation->is_blocked);
-        Event::assertDispatched(ReservationCreated::class);
+        Event::assertDispatched(ReservationCreated::class, function (ReservationCreated $event): bool {
+            return $event->tenantId === $this->tenant->id
+                && $event->reservationId > 0;
+        });
     }
 
     public function test_create_reservation_with_guests(): void
@@ -356,7 +359,10 @@ class ReservationServiceTest extends TestCase
 
         $this->service->createReservation($data);
 
-        Event::assertDispatched(ReservationCreated::class);
+        Event::assertDispatched(ReservationCreated::class, function (ReservationCreated $event): bool {
+            return $event->tenantId === $this->tenant->id
+                && $event->reservationId > 0;
+        });
     }
 
     public function test_create_reservation_without_required_dni(): void

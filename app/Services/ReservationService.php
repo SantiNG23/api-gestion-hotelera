@@ -132,7 +132,7 @@ class ReservationService extends Service
                 'guests',
             ]);
 
-            ReservationCreated::dispatch($reservation);
+            ReservationCreated::dispatch($reservation->id, $tenantId);
 
             return $reservation;
         });

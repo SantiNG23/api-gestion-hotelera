@@ -8,6 +8,7 @@ use App\Events\UserRegistered;
 use App\Listeners\CreateInitialUserSettings;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -23,7 +24,8 @@ class CreateInitialUserSettingsTest extends TestCase
         $user = User::factory()->create([
             'tenant_id' => $tenant->id,
         ]);
-        $event = new UserRegistered($user);
+        $this->setTenantContext(null);
+        $event = new UserRegistered($user->id, $tenant->id);
 
         $listener = new CreateInitialUserSettings;
         $listener->handle($event);
@@ -36,6 +38,7 @@ class CreateInitialUserSettingsTest extends TestCase
             'marketing_emails' => false,
             'transactional_emails' => true,
         ]);
+        $this->assertNull(app(TenantContext::class)->id());
     }
 
     #[Test]
@@ -45,7 +48,8 @@ class CreateInitialUserSettingsTest extends TestCase
         $user = User::factory()->create([
             'tenant_id' => $tenant->id,
         ]);
-        $event = new UserRegistered($user);
+        $this->setTenantContext(null);
+        $event = new UserRegistered($user->id, $tenant->id);
 
         $listener = new CreateInitialUserSettings;
         $listener->handle($event);
@@ -56,5 +60,6 @@ class CreateInitialUserSettingsTest extends TestCase
             'user_id' => $user->id,
             'tenant_id' => $user->tenant_id,
         ]);
+        $this->assertNull(app(TenantContext::class)->id());
     }
 }

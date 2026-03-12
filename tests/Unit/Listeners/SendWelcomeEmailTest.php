@@ -7,7 +7,9 @@ namespace Tests\Unit\Listeners;
 use App\Events\UserRegistered;
 use App\Listeners\SendWelcomeEmail;
 use App\Mail\WelcomeUserMail;
+use App\Models\Tenant;
 use App\Models\User;
+use App\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
@@ -22,10 +24,13 @@ class SendWelcomeEmailTest extends TestCase
     {
         Mail::fake();
 
+        $tenant = Tenant::factory()->create();
         $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
             'email' => 'nuevo@miradordeluz.com',
         ]);
-        $event = new UserRegistered($user);
+        $this->setTenantContext(null);
+        $event = new UserRegistered($user->id, $tenant->id);
 
         $listener = new SendWelcomeEmail;
         $listener->handle($event);
@@ -33,5 +38,6 @@ class SendWelcomeEmailTest extends TestCase
         Mail::assertQueued(WelcomeUserMail::class, function (WelcomeUserMail $mail) use ($user): bool {
             return $mail->user->is($user) && $mail->hasTo($user->email);
         });
+        $this->assertNull(app(TenantContext::class)->id());
     }
 }

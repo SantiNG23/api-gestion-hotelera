@@ -6,6 +6,8 @@ namespace App\Listeners;
 
 use App\Events\UserRegistered;
 use App\Mail\WelcomeUserMail;
+use App\Models\User;
+use App\Tenancy\TenantContext;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Mail;
@@ -29,8 +31,13 @@ class SendWelcomeEmail implements ShouldQueue
      */
     public function handle(UserRegistered $event): void
     {
-        // TODO(MVP+): reemplazar este welcome email por flujo de invitacion segura
-        // con magic link de primer acceso + definicion de contraseña para cuentas internas.
-        Mail::to($event->user)->queue(new WelcomeUserMail($event->user));
+        app(TenantContext::class)->run($event->tenantId, function () use ($event): void {
+            $user = User::query()
+                ->whereKey($event->userId)
+                ->where('tenant_id', $event->tenantId)
+                ->firstOrFail();
+
+            Mail::to($user)->queue(new WelcomeUserMail($user));
+        });
     }
 }

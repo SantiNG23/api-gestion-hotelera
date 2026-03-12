@@ -24,10 +24,11 @@ class UserRegisteredTest extends TestCase
 
         $user = User::factory()->create();
 
-        event(new UserRegistered($user));
+        event(new UserRegistered($user->id, (int) $user->tenant_id));
 
         Event::assertDispatched(UserRegistered::class, function ($event) use ($user) {
-            return $event->user->id === $user->id;
+            return $event->userId === $user->id
+                && $event->tenantId === (int) $user->tenant_id;
         });
     }
 
@@ -38,7 +39,7 @@ class UserRegisteredTest extends TestCase
 
         $user = User::factory()->create();
 
-        event(new UserRegistered($user));
+        event(new UserRegistered($user->id, (int) $user->tenant_id));
 
         Event::assertListening(
             UserRegistered::class,
@@ -53,7 +54,7 @@ class UserRegisteredTest extends TestCase
 
         $user = User::factory()->create();
 
-        event(new UserRegistered($user));
+        event(new UserRegistered($user->id, (int) $user->tenant_id));
 
         Event::assertListening(
             UserRegistered::class,
@@ -66,7 +67,7 @@ class UserRegisteredTest extends TestCase
     {
         $listener = new SendWelcomeEmail;
         $user = User::factory()->create();
-        $event = new UserRegistered($user);
+        $event = new UserRegistered($user->id, (int) $user->tenant_id);
 
         $listener->handle($event);
 
@@ -82,7 +83,7 @@ class UserRegisteredTest extends TestCase
     {
         $listener = new CreateInitialUserSettings;
         $user = User::factory()->create();
-        $event = new UserRegistered($user);
+        $event = new UserRegistered($user->id, (int) $user->tenant_id);
 
         $listener->handle($event);
 

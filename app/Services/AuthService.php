@@ -65,7 +65,7 @@ class AuthService
 
         if (! $user) {
             $user = $this->createUser($data);
-            UserRegistered::dispatch($user);
+            UserRegistered::dispatch($user->id, (int) $user->tenant_id);
         } elseif (! $this->validateCredentials($user, $data['password'])) {
             throw ValidationException::withMessages([
                 'email' => ['Las credenciales proporcionadas son incorrectas.'],
