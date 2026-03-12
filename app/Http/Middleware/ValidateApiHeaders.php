@@ -39,8 +39,8 @@ class ValidateApiHeaders
      */
     protected function validateAcceptHeader(Request $request): bool
     {
-         return $request->hasHeader('Accept') &&
-             $this->containsJsonMediaType($request->header('Accept'));
+        return $request->hasHeader('Accept') &&
+            $this->containsJsonMediaType($request->header('Accept'));
     }
 
     /**
