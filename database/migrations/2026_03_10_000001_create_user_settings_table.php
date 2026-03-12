@@ -29,6 +29,7 @@ return new class extends Migration
             $table->boolean('marketing_emails')->default(false);
             $table->boolean('transactional_emails')->default(true);
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 

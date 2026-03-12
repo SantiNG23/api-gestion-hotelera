@@ -7,12 +7,19 @@ namespace App\Services;
 use App\Events\UserRegistered;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Tenancy\TenantContext;
+use App\Tenancy\TenantContextResolver;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
 class AuthService
 {
+    public function __construct(
+        private readonly TenantContextResolver $tenantContextResolver,
+        private readonly TenantContext $tenantContext,
+    ) {}
+
     /**
      * Valida las credenciales del usuario
      */
@@ -34,11 +41,13 @@ class AuthService
      */
     public function createUser(array $userData): User
     {
+        $tenantId = $this->resolveTrustedTenantId($userData);
+
         return User::create([
             'name' => $userData['name'],
             'email' => $userData['email'],
             'password' => Hash::make($userData['password']),
-            'tenant_id' => $this->resolveTenantIdForRegistration($userData),
+            'tenant_id' => $tenantId,
         ]);
     }
 
@@ -47,9 +56,11 @@ class AuthService
      */
     public function authenticate(array $data): User
     {
+        $tenantId = $this->resolveTrustedTenantId($data);
+
         $user = $this->findUserByEmail(
             $data['email'],
-            $this->resolveRequestedTenantId($data)
+            $tenantId
         );
 
         if (! $user) {
@@ -118,33 +129,21 @@ class AuthService
     /**
      * Obtiene el tenant explícito de la request o del usuario autenticado.
      */
-    private function resolveRequestedTenantId(array $data): ?int
+    private function resolveTrustedTenantId(array $data): int
     {
-        $tenantId = $data['tenant_id'] ?? Auth::user()?->tenant_id;
-
-        return $tenantId !== null ? (int) $tenantId : null;
-    }
-
-    /**
-     * Resuelve el tenant para el registro público.
-     *
-     * - Si llega `tenant_id`, se usa.
-     * - Si hay usuario autenticado, se reutiliza su tenant.
-     * - Si no existen tenants, se crea uno por defecto para mantener compatibilidad.
-     * - Si existe exactamente un tenant, se usa ese.
-     * - Si existen múltiples tenants sin contexto, se rechaza por ambigüedad.
-     */
-    private function resolveTenantIdForRegistration(array $data): int
-    {
-        $tenantId = $this->resolveRequestedTenantId($data);
+        $tenantId = $this->tenantContext->id() ?? Auth::user()?->tenant_id;
 
         if ($tenantId !== null) {
-            return $tenantId;
+            return (int) $tenantId;
         }
 
-        $tenantCount = Tenant::query()->count();
+        $bootstrapTenantId = $this->tenantContextResolver->resolveForPublicAuth($data);
 
-        if ($tenantCount === 0) {
+        if ($bootstrapTenantId !== null) {
+            return $bootstrapTenantId;
+        }
+
+        if (! Tenant::query()->exists()) {
             return Tenant::query()->create([
                 'name' => 'Default Tenant',
                 'slug' => 'default-tenant',
@@ -152,12 +151,8 @@ class AuthService
             ])->id;
         }
 
-        if ($tenantCount === 1) {
-            return (int) Tenant::query()->value('id');
-        }
-
         throw ValidationException::withMessages([
-            'tenant_id' => ['Se requiere contexto de tenant para registrar usuarios cuando existen múltiples tenants.'],
+            'tenant_id' => ['No se pudo resolver un tenant confiable para este flujo de autenticación.'],
         ]);
     }
 }

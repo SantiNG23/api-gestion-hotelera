@@ -20,7 +20,7 @@ class AuthServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->authService = new AuthService;
+        $this->authService = app(AuthService::class);
     }
 
     #[Test]
@@ -53,6 +53,7 @@ class AuthServiceTest extends TestCase
         $this->assertEquals('Test User', $user->name);
         $this->assertEquals('test@example.com', $user->email);
         $this->assertTrue(Hash::check('password123', $user->password));
+        $this->assertNotNull($user->tenant_id);
     }
 
     #[Test]

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Models\User;
+use App\Tenancy\TenantContext;
 
 class AuthRequest extends ApiRequest
 {
@@ -15,15 +16,15 @@ class AuthRequest extends ApiRequest
      */
     public function rules(): array
     {
-        $tenantId = $this->input('tenant_id') ?? $this->user()?->tenant_id;
+        $tenantId = app(TenantContext::class)->id();
 
         $rules = [
             'email' => 'required|email|max:255',
             'password' => 'required|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&.])[A-Za-z\d@$!%*?&.]+$/',
-            'tenant_id' => 'nullable|integer|exists:tenants,id',
+            'tenant_id' => ['prohibited'],
         ];
 
-        $existingUserQuery = User::query()->where('email', $this->email);
+        $existingUserQuery = User::query()->where('email', $this->string('email')->toString());
 
         if ($tenantId !== null) {
             $existingUserQuery->where('tenant_id', $tenantId);
@@ -58,6 +59,7 @@ class AuthRequest extends ApiRequest
             'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
             'password.regex' => 'La contraseña debe contener al menos una letra mayúscula, una minúscula, un número y un carácter especial (@$!%*?&.).',
             'password.confirmed' => 'La confirmación de la contraseña no coincide.',
+            'tenant_id.prohibited' => 'El tenant_id no puede enviarse en este flujo de autenticación.',
         ];
     }
 }

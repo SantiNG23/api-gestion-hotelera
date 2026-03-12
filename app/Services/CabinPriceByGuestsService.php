@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\Cabin;
 use App\Models\CabinPriceByGuests;
+use App\Models\PriceGroup;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Validation\ValidationException;
 
 class CabinPriceByGuestsService extends Service
 {
@@ -74,6 +77,8 @@ class CabinPriceByGuestsService extends Service
      */
     public function createCabinPriceByGuests(array $data): CabinPriceByGuests
     {
+        $this->guardTenantIntegrity($data);
+
         return $this->create($data);
     }
 
@@ -82,6 +87,13 @@ class CabinPriceByGuestsService extends Service
      */
     public function updateCabinPriceByGuests(int $id, array $data): CabinPriceByGuests
     {
+        $current = CabinPriceByGuests::query()->findOrFail($id);
+
+        $this->guardTenantIntegrity(array_merge([
+            'cabin_id' => $current->cabin_id,
+            'price_group_id' => $current->price_group_id,
+        ], $data));
+
         return $this->update($id, $data);
     }
 
@@ -134,5 +146,36 @@ class CabinPriceByGuestsService extends Service
     protected function filterByNumGuests(Builder $query, mixed $value): Builder
     {
         return $query->where('num_guests', $value);
+    }
+
+    private function guardTenantIntegrity(array $data): void
+    {
+        $tenantId = $this->requireTenantId();
+        $cabinId = (int) ($data['cabin_id'] ?? 0);
+        $priceGroupId = (int) ($data['price_group_id'] ?? 0);
+
+        $cabinExists = Cabin::query()
+            ->withoutGlobalScope('tenant')
+            ->whereKey($cabinId)
+            ->where('tenant_id', $tenantId)
+            ->exists();
+
+        $priceGroupExists = PriceGroup::query()
+            ->withoutGlobalScope('tenant')
+            ->whereKey($priceGroupId)
+            ->where('tenant_id', $tenantId)
+            ->exists();
+
+        if (! $cabinExists) {
+            throw ValidationException::withMessages([
+                'cabin_id' => ['La cabaña no pertenece al tenant activo.'],
+            ]);
+        }
+
+        if (! $priceGroupExists) {
+            throw ValidationException::withMessages([
+                'price_group_id' => ['El grupo de precio no pertenece al tenant activo.'],
+            ]);
+        }
     }
 }

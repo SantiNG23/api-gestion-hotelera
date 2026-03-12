@@ -28,7 +28,7 @@ class CreateInitialUserSettings implements ShouldQueue
      */
     public function handle(UserRegistered $event): void
     {
-        UserSetting::query()->firstOrCreate(
+        UserSetting::query()->withoutGlobalScope('tenant')->firstOrCreate(
             ['user_id' => $event->user->id],
             [
                 'tenant_id' => $event->user->tenant_id,

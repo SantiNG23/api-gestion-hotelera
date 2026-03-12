@@ -8,6 +8,7 @@ use App\Models\Cabin;
 use App\Models\CabinPriceByGuests;
 use App\Models\PriceGroup;
 use App\Models\Tenant;
+use App\Services\CabinPriceByGuestsService;
 use App\Services\PriceGroupService;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
@@ -24,6 +25,8 @@ use Tests\TestCase;
  */
 class PricingRisksValidationTest extends TestCase
 {
+    private CabinPriceByGuestsService $service;
+
     private Cabin $cabin;
     private PriceGroup $priceGroup;
     private Tenant $otherTenant;
@@ -33,6 +36,7 @@ class PricingRisksValidationTest extends TestCase
     {
         parent::setUp();
         $this->createAuthenticatedUser();
+        $this->service = app(CabinPriceByGuestsService::class);
 
         // Crear cabaña para este tenant
         $this->cabin = Cabin::factory()->create([
@@ -50,9 +54,53 @@ class PricingRisksValidationTest extends TestCase
 
         // Crear tenant ajeno para validar aislamiento
         $this->otherTenant = Tenant::factory()->create();
+
+        $this->setTenantContext($this->otherTenant->id);
         $this->otherTenantCabin = Cabin::factory()->create([
             'tenant_id' => $this->otherTenant->id,
             'capacity' => 6,
+        ]);
+
+        $this->setTenantContext($this->tenant->id);
+    }
+
+    public function test_cabin_price_request_rejects_cross_tenant_ids(): void
+    {
+        $this->setTenantContext($this->otherTenant->id);
+        $otherTenantPriceGroup = PriceGroup::factory()->create([
+            'tenant_id' => $this->otherTenant->id,
+        ]);
+
+        $this->setTenantContext($this->tenant->id);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/v1/cabin-prices-by-guests', [
+                'cabin_id' => $this->otherTenantCabin->id,
+                'price_group_id' => $otherTenantPriceGroup->id,
+                'num_guests' => 2,
+                'price_per_night' => 100,
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['cabin_id', 'price_group_id']);
+    }
+
+    public function test_cabin_price_service_rejects_cross_tenant_relations_even_if_validation_is_bypassed(): void
+    {
+        $this->setTenantContext($this->otherTenant->id);
+        $otherTenantPriceGroup = PriceGroup::factory()->create([
+            'tenant_id' => $this->otherTenant->id,
+        ]);
+
+        $this->setTenantContext($this->tenant->id);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+
+        $this->service->createCabinPriceByGuests([
+            'cabin_id' => $this->otherTenantCabin->id,
+            'price_group_id' => $otherTenantPriceGroup->id,
+            'num_guests' => 2,
+            'price_per_night' => 100,
         ]);
     }
 

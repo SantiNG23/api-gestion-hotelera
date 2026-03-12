@@ -43,6 +43,39 @@ class AuthTest extends TestCase
             'email' => 'usuario@prueba.com',
             'name' => 'Usuario Prueba',
         ]);
+
+        $this->assertNotNull(User::query()->where('email', 'usuario@prueba.com')->value('tenant_id'));
+    }
+
+    #[Test]
+    public function test_public_auth_rejects_arbitrary_tenant_id_payload(): void
+    {
+        $response = $this->postJson('/api/v1/auth', [
+            'name' => 'Usuario Prueba',
+            'email' => 'usuario@prueba.com',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+            'tenant_id' => 999,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['tenant_id']);
+    }
+
+    #[Test]
+    public function test_public_auth_fails_without_trusted_tenant_when_multiple_tenants_exist(): void
+    {
+        Tenant::factory()->count(2)->create();
+
+        $response = $this->postJson('/api/v1/auth', [
+            'name' => 'Usuario Prueba',
+            'email' => 'usuario@prueba.com',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['tenant_id']);
     }
 
     #[Test]
