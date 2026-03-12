@@ -11,6 +11,7 @@ use App\Models\Client;
 use App\Models\PriceGroup;
 use App\Models\Reservation;
 use App\Models\ReservationPayment;
+use App\Models\Tenant;
 use App\Services\ReservationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Event;
@@ -375,6 +376,26 @@ class ReservationServiceTest extends TestCase
         $this->service->createReservation($data);
     }
 
+    public function test_create_reservation_rejects_payload_tenant_override(): void
+    {
+        $otherTenant = Tenant::factory()->create();
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('tenant_id');
+
+        $this->service->createReservation([
+            'tenant_id' => $otherTenant->id,
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
+            'num_guests' => 2,
+            'client' => [
+                'name' => 'Payload Override',
+                'dni' => '67676767',
+            ],
+        ]);
+    }
+
     // ============= updateReservation() - 5 tests =============
 
     public function test_update_reservation_notes(): void
@@ -514,6 +535,26 @@ class ReservationServiceTest extends TestCase
         $this->expectException(ValidationException::class);
         $this->service->updateReservation($reservation->id, [
             'notes' => 'Should fail',
+        ]);
+    }
+
+    public function test_update_reservation_rejects_payload_tenant_override(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+        ]);
+
+        $otherTenant = Tenant::factory()->create();
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('tenant_id');
+
+        $this->service->updateReservation($reservation->id, [
+            'tenant_id' => $otherTenant->id,
+            'notes' => 'Intento de override',
         ]);
     }
 
@@ -817,6 +858,7 @@ class ReservationServiceTest extends TestCase
             'tenant_id' => $this->tenant->id,
             'cabin_id' => $this->cabin->id,
             'client_id' => $this->client->id,
+            'num_guests' => 2,
             'is_blocked' => false,
             'total_price' => 300,
             'status' => Reservation::STATUS_PENDING_CONFIRMATION,

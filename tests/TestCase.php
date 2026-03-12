@@ -6,6 +6,7 @@ namespace Tests;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Foundation\Testing\WithFaker;
@@ -29,6 +30,8 @@ abstract class TestCase extends BaseTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $this->setTenantContext(null);
 
         // Desactivar eventos por defecto
         Event::fake();
@@ -59,11 +62,14 @@ abstract class TestCase extends BaseTestCase
             $this->createTenant();
         }
 
+        $this->setTenantContext($this->tenant->id);
+
         $this->user = User::factory()->create(array_merge([
             'tenant_id' => $this->tenant->id,
         ], $attributes));
 
         $this->token = $this->user->createToken('test-token')->plainTextToken;
+        $this->setTenantContext($this->tenant->id);
 
         return [
             'user' => $this->user,
@@ -128,5 +134,23 @@ abstract class TestCase extends BaseTestCase
                 'message',
                 'errors',
             ]);
+    }
+
+    protected function setTenantContext(?int $tenantId): void
+    {
+        $tenantContext = app(TenantContext::class);
+
+        if ($tenantId === null) {
+            $tenantContext->clear();
+
+            return;
+        }
+
+        $tenantContext->set($tenantId);
+    }
+
+    protected function runInTenantContext(int $tenantId, callable $callback): mixed
+    {
+        return app(TenantContext::class)->run($tenantId, $callback);
     }
 }

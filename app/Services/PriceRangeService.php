@@ -8,7 +8,6 @@ use App\Models\PriceGroup;
 use App\Models\PriceRange;
 use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 
 class PriceRangeService extends Service
@@ -118,24 +117,26 @@ class PriceRangeService extends Service
     ): array {
         $start = Carbon::parse($startDate)->startOfDay();
         $end = Carbon::parse($endDate)->endOfDay();
+        $currentTenantId = $this->requireTenantId();
 
-        if (! $tenantId) {
-            $tenantId = Auth::user()?->tenant_id;
+        if ($tenantId === null) {
+            $tenantId = $currentTenantId;
         }
 
-        // Obtener todos los rangos que tocan el período
+        if ($tenantId !== $currentTenantId) {
+            throw ValidationException::withMessages([
+                'tenant_id' => ['El acceso cross-tenant requiere un flujo administrativo explicito.'],
+            ]);
+        }
+
         $priceRanges = $this->model
-            ->withoutGlobalScope('tenant')
             ->where('tenant_id', $tenantId)
             ->where('end_date', '>=', $start)
             ->where('start_date', '<=', $end)
-            ->with(['priceGroup' => function ($query) {
-                $query->withoutGlobalScope('tenant');
-            }])
+            ->with('priceGroup')
             ->get();
 
-        // Obtener el grupo por defecto del tenant
-        $defaultGroup = PriceGroup::withoutGlobalScope('tenant')
+        $defaultGroup = PriceGroup::query()
             ->where('tenant_id', $tenantId)
             ->where('is_default', true)
             ->first();

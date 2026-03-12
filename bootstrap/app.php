@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Middleware\ApiRateLimiter;
+use App\Http\Middleware\ResolveTenantContext;
 use App\Http\Middleware\ValidateApiHeaders;
 use App\Traits\ApiResponseFormatter;
 use Illuminate\Foundation\Application;
@@ -21,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api([
             ValidateApiHeaders::class,
             ApiRateLimiter::class,
+            ResolveTenantContext::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

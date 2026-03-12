@@ -9,7 +9,6 @@ use App\Models\CabinPriceByGuests;
 use App\Models\PriceGroup;
 use App\Models\PriceRange;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -56,9 +55,8 @@ class PriceGroupService extends Service
     public function createPriceGroup(array $data): PriceGroup
     {
         return DB::transaction(function () use ($data) {
-            // Si se marca como default, desactivar otros defaults del mismo tenant
             if (! empty($data['is_default'])) {
-                $tenantId = $data['tenant_id'] ?? Auth::user()->tenant_id;
+                $tenantId = $this->requireTenantId();
                 $this->model->where('tenant_id', $tenantId)
                     ->where('is_default', true)
                     ->update(['is_default' => false]);
@@ -108,11 +106,10 @@ class PriceGroupService extends Service
      */
     public function getCompletePriceGroup(int $id): array
     {
-        $priceGroup = $this->model->where('tenant_id', Auth::user()->tenant_id)
-            ->with([
-                'priceRanges',
-                'cabinPricesByGuests.cabin:id,name,description,capacity,is_active',
-            ])
+        $priceGroup = $this->model->with([
+            'priceRanges',
+            'cabinPricesByGuests.cabin:id,name,description,capacity,is_active',
+        ])
             ->findOrFail($id);
 
         // Agrupar precios por cabaña, filtrando cabañas eliminadas
@@ -157,9 +154,8 @@ class PriceGroupService extends Service
         }
 
         return DB::transaction(function () use ($data) {
-            $tenantId = Auth::user()->tenant_id;
+            $tenantId = $this->requireTenantId();
 
-            // 1. Crear el PriceGroup
             $priceGroup = $this->createPriceGroup([
                 'name' => $data['name'],
                 'price_per_night' => $this->resolveRepresentativePricePerNight($data['cabins']),
@@ -213,7 +209,7 @@ class PriceGroupService extends Service
         }
 
         return DB::transaction(function () use ($priceGroup, $data) {
-            $tenantId = Auth::user()->tenant_id;
+            $tenantId = $this->requireTenantId();
 
             $basicData = array_intersect_key($data, array_flip(['name', 'is_default', 'priority']));
 
@@ -263,14 +259,14 @@ class PriceGroupService extends Service
     private function validateCabinsAndPrices(array $cabins): void
     {
         $seen = [];
-        $tenantId = Auth::user()->tenant_id;
+        $tenantId = $this->requireTenantId();
 
         foreach ($cabins as $cabinData) {
-            $cabin = Cabin::findOrFail($cabinData['cabin_id']);
+            $cabin = Cabin::query()->withoutGlobalScope('tenant')->find($cabinData['cabin_id']);
 
-            if ($cabin->tenant_id !== $tenantId) {
+            if (! $cabin || $cabin->tenant_id !== $tenantId) {
                 throw ValidationException::withMessages([
-                    'cabins' => ['La cabaña no pertenece a tu cuenta'],
+                    'cabins.0.cabin_id' => ['La cabaña no pertenece al tenant activo.'],
                 ]);
             }
 

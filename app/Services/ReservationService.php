@@ -13,7 +13,6 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -67,6 +66,9 @@ class ReservationService extends Service
      */
     public function createReservation(array $data): Reservation
     {
+        $tenantId = $this->requireTenantId();
+        $this->guardTenantOverride($data, $tenantId);
+
         $checkIn = Carbon::parse($data['check_in_date']);
         $checkOut = Carbon::parse($data['check_out_date']);
         $cabin = Cabin::findOrFail((int) $data['cabin_id']);
@@ -88,9 +90,7 @@ class ReservationService extends Service
             ? ['total' => 0, 'deposit' => 0, 'balance' => 0]
             : $this->priceCalculator->calculateReservablePrice($checkIn, $checkOut, $cabin, $numGuests);
 
-        return DB::transaction(function () use ($data, $priceDetails, $isBlocked, $numGuests) {
-            $tenantId = $data['tenant_id'] ?? Auth::user()->tenant_id;
-
+        return DB::transaction(function () use ($data, $priceDetails, $isBlocked, $numGuests, $tenantId) {
             // Si es un bloqueo, forzar el cliente técnico de bloqueo
             if ($isBlocked) {
                 $data['client'] = [
@@ -147,6 +147,8 @@ class ReservationService extends Service
     {
         /** @var Reservation $reservation */
         $reservation = $this->getById($id);
+        $tenantId = $this->requireTenantId();
+        $this->guardTenantOverride($data, $tenantId);
 
         // No permitir editar reservas finalizadas o canceladas
         if ($reservation->isFinished() || $reservation->isCancelled()) {
@@ -205,7 +207,6 @@ class ReservationService extends Service
 
         // Resolver cliente si se envía client (o si lo forzamos arriba por ser bloqueo)
         if (isset($data['client'])) {
-            $tenantId = $reservation->tenant_id ?? Auth::user()->tenant_id;
             $client = $this->resolveClient(
                 $tenantId,
                 $data['client']
@@ -653,5 +654,14 @@ class ReservationService extends Service
         $clientData['tenant_id'] = $tenantId;
 
         return $this->clientService->createClient($clientData);
+    }
+
+    private function guardTenantOverride(array $data, int $tenantId): void
+    {
+        if (array_key_exists('tenant_id', $data) && $data['tenant_id'] !== null && (int) $data['tenant_id'] !== $tenantId) {
+            throw ValidationException::withMessages([
+                'tenant_id' => ['El tenant_id no coincide con el contexto tenant activo.'],
+            ]);
+        }
     }
 }
