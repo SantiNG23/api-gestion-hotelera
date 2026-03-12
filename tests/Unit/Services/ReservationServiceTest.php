@@ -864,7 +864,7 @@ class ReservationServiceTest extends TestCase
             'tenant_id' => $this->tenant->id,
             'cabin_id' => $this->cabin->id,
             'client_id' => $this->client->id,
-            'num_guests' => 2,
+            'num_guests' => 5,
             'is_blocked' => false,
             'total_price' => 300,
             'status' => Reservation::STATUS_PENDING_CONFIRMATION,

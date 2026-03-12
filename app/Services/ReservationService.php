@@ -84,8 +84,6 @@ class ReservationService extends Service
         $isBlocked = (bool) ($data['is_blocked'] ?? false);
         $numGuests = (int) ($data['num_guests'] ?? 2);
 
-        $this->priceCalculator->ensureGuestCapacityFitsCabin($cabin, $numGuests);
-
         $priceDetails = $isBlocked
             ? ['total' => 0, 'deposit' => 0, 'balance' => 0]
             : $this->priceCalculator->calculateReservablePrice($checkIn, $checkOut, $cabin, $numGuests);
@@ -173,13 +171,15 @@ class ReservationService extends Service
             $numGuests = max(1, $numGuests);
             $cabin = Cabin::findOrFail((int) $cabinId);
 
-            $this->priceCalculator->ensureGuestCapacityFitsCabin($cabin, $numGuests);
-
             // Validar disponibilidad (excluyendo la reserva actual)
             if (! $this->availabilityService->isAvailable((int) $cabinId, $checkIn, $checkOut, $reservation->id)) {
                 throw ValidationException::withMessages([
                     'cabin_id' => ['La cabaña no está disponible para las fechas seleccionadas'],
                 ]);
+            }
+
+            if (! $isBlocked) {
+                $this->priceCalculator->ensureGuestCapacityFitsCabin($cabin, $numGuests);
             }
 
             // Si está bloqueada, precios en 0; si no, calcular normalmente
