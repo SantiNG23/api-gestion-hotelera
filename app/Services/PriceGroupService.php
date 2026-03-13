@@ -261,26 +261,26 @@ class PriceGroupService extends Service
         $seen = [];
         $tenantId = $this->requireTenantId();
 
-        foreach ($cabins as $cabinData) {
+        foreach ($cabins as $i => $cabinData) {
             $cabin = Cabin::query()->withoutGlobalScope('tenant')->find($cabinData['cabin_id']);
 
             if (! $cabin || $cabin->tenant_id !== $tenantId) {
                 throw ValidationException::withMessages([
-                    'cabins.0.cabin_id' => ['La cabaña no pertenece al tenant activo.'],
+                    "cabins.{$i}.cabin_id" => ['La cabaña no pertenece al tenant activo.'],
                 ]);
             }
 
-            foreach ($cabinData['prices'] as $priceData) {
+            foreach ($cabinData['prices'] as $j => $priceData) {
                 if ($priceData['num_guests'] > $cabin->capacity) {
                     throw ValidationException::withMessages([
-                        'cabins.prices' => ["La cantidad de huéspedes ({$priceData['num_guests']}) excede la capacidad de '{$cabin->name}' ({$cabin->capacity})"],
+                        "cabins.{$i}.prices.{$j}.num_guests" => ["La cantidad de huéspedes ({$priceData['num_guests']}) excede la capacidad de '{$cabin->name}' ({$cabin->capacity})"],
                     ]);
                 }
 
                 $key = $cabinData['cabin_id'].'-'.$priceData['num_guests'];
                 if (isset($seen[$key])) {
                     throw ValidationException::withMessages([
-                        'cabins.prices' => ["Precio duplicado para {$priceData['num_guests']} huéspedes en '{$cabin->name}'"],
+                        "cabins.{$i}.prices.{$j}.num_guests" => ["Precio duplicado para {$priceData['num_guests']} huéspedes en '{$cabin->name}'"],
                     ]);
                 }
                 $seen[$key] = true;

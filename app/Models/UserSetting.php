@@ -60,7 +60,7 @@ class UserSetting extends Model
         return $this->belongsTo(Tenant::class);
     }
 
-    public function save(array $options = [])
+    public function save(array $options = []): bool
     {
         $this->guardTenantConsistency();
 
