@@ -32,6 +32,15 @@ final class TenantContextResolver
             return null;
         }
 
+        if (isset($payload['tenant_slug']) && is_string($payload['tenant_slug']) && $payload['tenant_slug'] !== '') {
+            $tenantId = Tenant::query()
+                ->where('slug', $payload['tenant_slug'])
+                ->where('is_active', true)
+                ->value('id');
+
+            return $tenantId !== null ? (int) $tenantId : null;
+        }
+
         $tenantCount = Tenant::query()->count();
 
         if ($tenantCount === 1) {

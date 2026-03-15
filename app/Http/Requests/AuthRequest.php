@@ -6,6 +6,7 @@ namespace App\Http\Requests;
 
 use App\Models\User;
 use App\Tenancy\TenantContext;
+use Illuminate\Validation\Rule;
 
 class AuthRequest extends ApiRequest
 {
@@ -22,6 +23,7 @@ class AuthRequest extends ApiRequest
             'email' => 'required|email|max:255',
             'password' => 'required|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&.])[A-Za-z\d@$!%*?&.]+$/',
             'tenant_id' => ['prohibited'],
+            'tenant_slug' => ['sometimes', 'string', Rule::exists('tenants', 'slug')->where('is_active', true)],
         ];
 
         $existingUserQuery = User::query()->where('email', $this->string('email')->toString());
@@ -60,6 +62,7 @@ class AuthRequest extends ApiRequest
             'password.regex' => 'La contraseña debe contener al menos una letra mayúscula, una minúscula, un número y un carácter especial (@$!%*?&.).',
             'password.confirmed' => 'La confirmación de la contraseña no coincide.',
             'tenant_id.prohibited' => 'El tenant_id no puede enviarse en este flujo de autenticación.',
+            'tenant_slug.exists' => 'El tenant_slug debe corresponder a un tenant activo.',
         ];
     }
 }
