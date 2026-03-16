@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Traits\BelongsToTenant;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -70,11 +71,27 @@ class Reservation extends Model
     }
 
     /**
+     * Cliente de la reserva incluyendo soft-deleted
+     */
+    public function clientWithTrashed(): BelongsTo
+    {
+        return $this->belongsTo(Client::class, 'client_id')->withTrashed();
+    }
+
+    /**
      * Cabaña de la reserva
      */
     public function cabin(): BelongsTo
     {
         return $this->belongsTo(Cabin::class);
+    }
+
+    /**
+     * Cabaña de la reserva incluyendo soft-deleted
+     */
+    public function cabinWithTrashed(): BelongsTo
+    {
+        return $this->belongsTo(Cabin::class, 'cabin_id')->withTrashed();
     }
 
     /**
@@ -139,7 +156,7 @@ class Reservation extends Model
     public function blocksAvailability(): bool
     {
         if ($this->is_blocked) {
-            return true;
+            return ! in_array($this->status, [self::STATUS_CANCELLED, self::STATUS_FINISHED], true);
         }
 
         // Pendientes solo bloquean si no han vencido
@@ -205,7 +222,7 @@ class Reservation extends Model
             return 0;
         }
 
-        return (int) $this->check_in_date->diffInDays($this->check_out_date);
+        return (int) Carbon::parse($this->check_in_date)->diffInDays(Carbon::parse($this->check_out_date));
     }
 
     /**
@@ -214,7 +231,10 @@ class Reservation extends Model
     public function scopeBlocking(Builder $query): Builder
     {
         return $query->where(function ($q) {
-            $q->where('is_blocked', true)
+            $q->where(function ($qBlocked) {
+                $qBlocked->where('is_blocked', true)
+                    ->whereNotIn('status', [self::STATUS_CANCELLED, self::STATUS_FINISHED]);
+            })
                 ->orWhere(function ($q2) {
                     $q2->whereIn('status', self::BLOCKING_STATUSES)
                         ->where(function ($q3) {

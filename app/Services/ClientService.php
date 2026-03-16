@@ -39,7 +39,13 @@ class ClientService extends Service
      */
     public function getClientWithReservations(int $id): Client
     {
-        return $this->getByIdWith($id, ['reservations', 'reservations.cabin']);
+        return $this->getByIdWith($id, [
+            'reservations' => function ($query) {
+                $query->with([
+                    'cabin' => fn ($cabinQuery) => $cabinQuery->withTrashed(),
+                ]);
+            },
+        ]);
     }
 
     /**
@@ -50,8 +56,11 @@ class ClientService extends Service
         return $this->model
             ->where('dni', $dni)
             ->with(['reservations' => function ($query) {
-                $query->orderBy('check_in_date', 'desc');
-            }, 'reservations.cabin'])
+                $query->orderBy('check_in_date', 'desc')
+                    ->with([
+                        'cabin' => fn ($cabinQuery) => $cabinQuery->withTrashed(),
+                    ]);
+            }])
             ->first();
     }
 

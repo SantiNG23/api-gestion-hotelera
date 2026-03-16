@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Traits;
 
+use App\Exceptions\MissingTenantContextException;
 use App\Models\Tenant;
+use App\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Trait para modelos que pertenecen a un tenant
@@ -25,19 +27,50 @@ trait BelongsToTenant
      */
     public static function bootBelongsToTenant(): void
     {
-        // Scope global para filtrar por tenant del usuario autenticado
         static::addGlobalScope('tenant', function (Builder $builder) {
-            if (Auth::check() && Auth::user()->tenant_id) {
-                $builder->where($builder->getModel()->getTable().'.tenant_id', Auth::user()->tenant_id);
+            $tenantId = app(TenantContext::class)->id();
+
+            if ($tenantId === null) {
+                $builder->whereRaw('1 = 0');
+
+                return;
             }
+
+            $builder->where($builder->getModel()->getTable().'.tenant_id', $tenantId);
         });
 
-        // Asignar automáticamente el tenant_id al crear
-        static::creating(function ($model) {
-            if (Auth::check() && Auth::user()->tenant_id && ! $model->tenant_id) {
-                $model->tenant_id = Auth::user()->tenant_id;
-            }
+        static::saving(function ($model) {
+            self::guardTenantWrite($model);
         });
+
+        static::creating(function ($model) {
+            self::guardTenantWrite($model);
+        });
+
+        static::updating(function ($model) {
+            self::guardTenantWrite($model);
+        });
+    }
+
+    private static function guardTenantWrite(object $model): void
+    {
+        $tenantId = app(TenantContext::class)->id();
+
+        if ($tenantId === null) {
+            throw MissingTenantContextException::forOperation();
+        }
+
+        if (! isset($model->tenant_id)) {
+            $model->tenant_id = $tenantId;
+
+            return;
+        }
+
+        if ((int) $model->tenant_id !== $tenantId) {
+            throw ValidationException::withMessages([
+                'tenant_id' => ['El tenant_id no coincide con el contexto tenant activo.'],
+            ]);
+        }
     }
 
     /**

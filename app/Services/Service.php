@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Clase base abstracta para servicios
@@ -80,10 +81,7 @@ abstract class Service
      */
     protected function create(array $data): Model
     {
-        // Set tenant_id automatically if not provided and user is authenticated
-        if (! array_key_exists('tenant_id', $data) && Auth::check()) {
-            $data['tenant_id'] = Auth::user()->tenant_id;
-        }
+        $data = $this->normalizeTenantScopedData($data);
 
         return $this->model->create($data);
     }
@@ -99,6 +97,7 @@ abstract class Service
      */
     protected function update(int $id, array $data): Model
     {
+        $data = $this->normalizeTenantScopedData($data, false);
         $model = $this->getById($id);
         $model->update($data);
 
@@ -399,5 +398,31 @@ abstract class Service
     protected function getSimpleSearchSelectFields(): array
     {
         return ['id', $this->getSimpleSearchNameField()];
+    }
+
+    protected function requireTenantId(): int
+    {
+        return app(TenantContext::class)->requireId();
+    }
+
+    private function normalizeTenantScopedData(array $data, bool $assignWhenMissing = true): array
+    {
+        if (! Schema::hasColumn($this->model->getTable(), 'tenant_id')) {
+            return $data;
+        }
+
+        $tenantId = $this->requireTenantId();
+
+        if (array_key_exists('tenant_id', $data) && $data['tenant_id'] !== null && (int) $data['tenant_id'] !== $tenantId) {
+            throw ValidationException::withMessages([
+                'tenant_id' => ['El tenant_id no coincide con el contexto tenant activo.'],
+            ]);
+        }
+
+        if ($assignWhenMissing || array_key_exists('tenant_id', $data)) {
+            $data['tenant_id'] = $tenantId;
+        }
+
+        return $data;
     }
 }

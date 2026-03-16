@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Models\User;
+use App\Tenancy\TenantContext;
+use Illuminate\Validation\Rule;
 
 class AuthRequest extends ApiRequest
 {
@@ -15,13 +17,23 @@ class AuthRequest extends ApiRequest
      */
     public function rules(): array
     {
+        $tenantId = app(TenantContext::class)->id();
+
         $rules = [
             'email' => 'required|email|max:255',
             'password' => 'required|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&.])[A-Za-z\d@$!%*?&.]+$/',
+            'tenant_id' => ['prohibited'],
+            'tenant_slug' => ['sometimes', 'string', Rule::exists('tenants', 'slug')->where('is_active', true)],
         ];
 
+        $existingUserQuery = User::query()->where('email', $this->string('email')->toString());
+
+        if ($tenantId !== null) {
+            $existingUserQuery->where('tenant_id', $tenantId);
+        }
+
         // Si el email no existe, aplicamos las reglas de registro
-        if (! User::where('email', $this->email)->exists()) {
+        if (! $existingUserQuery->exists()) {
             $rules = array_merge($rules, [
                 'name' => 'required|string|min:3|max:255|regex:/^[\p{L}\s]+$/u',
                 'password' => 'required|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&.])[A-Za-z\d@$!%*?&.]+$/|confirmed',
@@ -49,6 +61,8 @@ class AuthRequest extends ApiRequest
             'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
             'password.regex' => 'La contraseña debe contener al menos una letra mayúscula, una minúscula, un número y un carácter especial (@$!%*?&.).',
             'password.confirmed' => 'La confirmación de la contraseña no coincide.',
+            'tenant_id.prohibited' => 'El tenant_id no puede enviarse en este flujo de autenticación.',
+            'tenant_slug.exists' => 'El tenant_slug debe corresponder a un tenant activo.',
         ];
     }
 }

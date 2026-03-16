@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Tenancy\TenantContext;
+use Illuminate\Validation\Rule;
+
 class CabinPriceByGuestsRequest extends ApiRequest
 {
     /**
@@ -13,9 +16,11 @@ class CabinPriceByGuestsRequest extends ApiRequest
      */
     public function rules(): array
     {
+        $tenantId = app(TenantContext::class)->requireId();
+
         return [
-            'cabin_id' => ['required', 'integer', 'exists:cabins,id'],
-            'price_group_id' => ['required', 'integer', 'exists:price_groups,id'],
+            'cabin_id' => ['required', 'integer', Rule::exists('cabins', 'id')->where('tenant_id', $tenantId)],
+            'price_group_id' => ['required', 'integer', Rule::exists('price_groups', 'id')->where('tenant_id', $tenantId)],
             'num_guests' => ['required', 'integer', 'min:2', 'max:255'],
             'price_per_night' => ['required', 'numeric', 'min:0', 'max:999999.99'],
         ];

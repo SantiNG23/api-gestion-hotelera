@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
+
 class ReservationRequest extends ApiRequest
 {
     /**
@@ -15,9 +18,15 @@ class ReservationRequest extends ApiRequest
     {
         $isPost = $this->isMethod('POST');
         $isBlocked = $this->boolean('is_blocked');
+        $tenantId = Auth::user()?->tenant_id;
+        $cabinExistsRule = Rule::exists('cabins', 'id');
+
+        if ($tenantId !== null) {
+            $cabinExistsRule = $cabinExistsRule->where('tenant_id', $tenantId);
+        }
 
         $rules = [
-            'cabin_id' => ['integer', 'exists:cabins,id'],
+            'cabin_id' => ['integer', $cabinExistsRule],
             'num_guests' => ['integer', 'min:2', 'max:255'],
             'check_in_date' => ['date'],
             'check_out_date' => ['date', 'after:check_in_date'],
@@ -68,7 +77,7 @@ class ReservationRequest extends ApiRequest
     {
         return [
             'cabin_id.required' => 'La cabaña es obligatoria',
-            'cabin_id.exists' => 'La cabaña no existe',
+            'cabin_id.exists' => 'La cabaña no existe o no pertenece a tu organización',
             'check_in_date.required' => 'La fecha de check-in es obligatoria',
             'check_in_date.after_or_equal' => 'La fecha de check-in debe ser hoy o posterior',
             'check_out_date.required' => 'La fecha de check-out es obligatoria',

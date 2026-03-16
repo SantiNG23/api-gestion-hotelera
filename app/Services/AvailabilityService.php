@@ -68,7 +68,10 @@ class AvailabilityService
     {
         return $this->getBlockingQuery($from, $to)
             ->where('cabin_id', $cabinId)
-            ->with(['client', 'cabin'])
+            ->with([
+                'client' => fn ($query) => $query->withTrashed(),
+                'cabin' => fn ($query) => $query->withTrashed(),
+            ])
             ->orderBy('check_in_date')
             ->get();
     }
@@ -125,7 +128,7 @@ class AvailabilityService
                 'reservations' => $reservations->map(function (Reservation $reservation) {
                     return [
                         'id' => $reservation->id,
-                        'client_name' => $reservation->client->name,
+                        'client_name' => $reservation->client?->name ?? 'N/A',
                         'check_in_date' => $reservation->check_in_date->format('Y-m-d'),
                         'check_out_date' => $reservation->check_out_date->format('Y-m-d'),
                         'status' => $reservation->status,

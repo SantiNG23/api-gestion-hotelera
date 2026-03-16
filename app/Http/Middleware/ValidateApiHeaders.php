@@ -40,7 +40,7 @@ class ValidateApiHeaders
     protected function validateAcceptHeader(Request $request): bool
     {
         return $request->hasHeader('Accept') &&
-               $request->header('Accept') === 'application/json';
+            $this->containsJsonMediaType($request->header('Accept'));
     }
 
     /**
@@ -49,6 +49,22 @@ class ValidateApiHeaders
     protected function validateContentTypeHeader(Request $request): bool
     {
         return $request->hasHeader('Content-Type') &&
-               $request->header('Content-Type') === 'application/json';
+               $this->containsJsonMediaType($request->header('Content-Type'));
+    }
+
+    /**
+     * Determina si el header contiene un media type JSON válido.
+     */
+    private function containsJsonMediaType(string $headerValue): bool
+    {
+        foreach (explode(',', strtolower($headerValue)) as $part) {
+            $mediaType = trim(explode(';', trim($part))[0]);
+
+            if ($mediaType === 'application/json' || str_ends_with($mediaType, '+json')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -231,6 +231,99 @@ class PriceCalculatorApiTest extends TestCase
             ->assertJsonValidationErrors(['cabin_id']);
     }
 
+    public function test_reject_calculate_price_for_cabin_from_other_tenant(): void
+    {
+        $data = [
+            'cabin_id' => $this->otherTenantCabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+            'num_guests' => 2,
+        ];
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/v1/reservations/calculate-price', $data);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['cabin_id']);
+    }
+
+    public function test_quote_rejects_cabin_from_other_tenant(): void
+    {
+        $data = [
+            'cabin_id' => $this->otherTenantCabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+            'num_guests' => 2,
+        ];
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/v1/reservations/quote', $data);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['cabin_id']);
+    }
+
+    public function test_calculate_price_prefers_highest_priority_range_when_overlapping(): void
+    {
+        $baseGroup = PriceGroup::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Base overlap',
+            'price_per_night' => 110,
+            'priority' => 1,
+            'is_default' => false,
+        ]);
+        CabinPriceByGuests::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'price_group_id' => $baseGroup->id,
+            'num_guests' => 2,
+            'price_per_night' => 110,
+        ]);
+
+        $premiumGroup = PriceGroup::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Premium overlap',
+            'price_per_night' => 220,
+            'priority' => 10,
+            'is_default' => false,
+        ]);
+        CabinPriceByGuests::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'price_group_id' => $premiumGroup->id,
+            'num_guests' => 2,
+            'price_per_night' => 220,
+        ]);
+
+        $startDate = Carbon::tomorrow();
+        $endDate = $startDate->copy()->addDays(2);
+
+        PriceRange::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'price_group_id' => $baseGroup->id,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ]);
+
+        PriceRange::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'price_group_id' => $premiumGroup->id,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/v1/reservations/calculate-price', [
+                'cabin_id' => $this->cabin->id,
+                'check_in_date' => $startDate->format('Y-m-d'),
+                'check_out_date' => $endDate->copy()->addDay()->format('Y-m-d'),
+                'num_guests' => 2,
+            ]);
+
+        $this->assertApiResponse($response);
+        $response->assertJsonPath('data.total_price', 660.0);
+    }
+
     /**
      * Test: Rechaza cuando se excede la capacidad de la cabaña
      */
@@ -248,6 +341,60 @@ class PriceCalculatorApiTest extends TestCase
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['num_guests']);
+    }
+
+    public function test_quote_rejects_when_exceeding_cabin_capacity(): void
+    {
+        $data = [
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+            'num_guests' => 5,
+        ];
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/v1/reservations/quote', $data);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['num_guests']);
+    }
+
+    public function test_calculate_price_rejects_missing_tariff_configuration_with_422(): void
+    {
+        $cabinWithoutTariff = Cabin::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'capacity' => 4,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/v1/reservations/calculate-price', [
+                'cabin_id' => $cabinWithoutTariff->id,
+                'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+                'check_out_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
+                'num_guests' => 2,
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['pricing']);
+    }
+
+    public function test_quote_rejects_missing_tariff_configuration_with_422(): void
+    {
+        $cabinWithoutTariff = Cabin::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'capacity' => 4,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/v1/reservations/quote', [
+                'cabin_id' => $cabinWithoutTariff->id,
+                'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+                'check_out_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
+                'num_guests' => 2,
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['pricing']);
     }
 
     /**

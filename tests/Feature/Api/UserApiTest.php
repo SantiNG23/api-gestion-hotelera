@@ -36,8 +36,19 @@ class UserApiTest extends TestCase
                     'name',
                     'email',
                     'created_at',
+                    'updated_at',
                 ],
             ]);
+    }
+
+    #[Test]
+    public function it_does_not_expose_token_in_profile_response()
+    {
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->localToken)
+            ->getJson('/api/v1/users/profile');
+
+        $response->assertStatus(200)
+            ->assertJsonMissingPath('data.token');
     }
 
     #[Test]
@@ -93,6 +104,48 @@ class UserApiTest extends TestCase
             ->assertJson([
                 'message' => 'Contraseña actualizada exitosamente',
             ]);
+    }
+
+    #[Test]
+    public function it_invalidates_old_tokens_after_password_change()
+    {
+        $passwordData = [
+            'current_password' => 'password',
+            'password' => 'NewPassword123!',
+            'password_confirmation' => 'NewPassword123!',
+        ];
+
+        $this->withHeader('Authorization', 'Bearer '.$this->localToken)
+            ->putJson('/api/v1/users/password', $passwordData)
+            ->assertStatus(200);
+
+        $this->assertCount(0, $this->localUser->fresh()->tokens);
+    }
+
+    #[Test]
+    public function it_allows_login_with_new_password_after_revoking_old_tokens()
+    {
+        $passwordData = [
+            'current_password' => 'password',
+            'password' => 'NewPassword123!',
+            'password_confirmation' => 'NewPassword123!',
+        ];
+
+        $extraToken = $this->localUser->createToken('second-token')->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer '.$this->localToken)
+            ->putJson('/api/v1/users/password', $passwordData)
+            ->assertStatus(200);
+
+        $this->assertCount(0, $this->localUser->fresh()->tokens);
+
+        $response = $this->postJson('/api/v1/auth', [
+            'email' => $this->localUser->email,
+            'password' => 'NewPassword123!',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonStructure(['data' => ['token']]);
     }
 
     #[Test]

@@ -123,6 +123,128 @@ class PriceCalculatorServiceTest extends TestCase
         $this->assertEquals('Temporada Alta', $result['breakdown'][0]['price_group']);
     }
 
+    public function test_calculates_price_prefers_highest_priority_range_when_overlapping(): void
+    {
+        $lowPriorityGroup = PriceGroup::factory()->create([
+            'tenant_id' => $this->localTenant->id,
+            'name' => 'Baja prioridad',
+            'price_per_night' => 90,
+            'priority' => 1,
+            'is_default' => false,
+        ]);
+
+        CabinPriceByGuests::factory()->create([
+            'tenant_id' => $this->localTenant->id,
+            'cabin_id' => $this->cabin->id,
+            'price_group_id' => $lowPriorityGroup->id,
+            'num_guests' => 2,
+            'price_per_night' => 90,
+        ]);
+
+        $highPriorityGroup = PriceGroup::factory()->create([
+            'tenant_id' => $this->localTenant->id,
+            'name' => 'Alta prioridad',
+            'price_per_night' => 180,
+            'priority' => 10,
+            'is_default' => false,
+        ]);
+
+        CabinPriceByGuests::factory()->create([
+            'tenant_id' => $this->localTenant->id,
+            'cabin_id' => $this->cabin->id,
+            'price_group_id' => $highPriorityGroup->id,
+            'num_guests' => 2,
+            'price_per_night' => 180,
+        ]);
+
+        PriceRange::factory()->create([
+            'tenant_id' => $this->localTenant->id,
+            'price_group_id' => $lowPriorityGroup->id,
+            'start_date' => Carbon::tomorrow(),
+            'end_date' => Carbon::tomorrow()->addDays(2),
+        ]);
+
+        PriceRange::factory()->create([
+            'tenant_id' => $this->localTenant->id,
+            'price_group_id' => $highPriorityGroup->id,
+            'start_date' => Carbon::tomorrow(),
+            'end_date' => Carbon::tomorrow()->addDays(2),
+        ]);
+
+        $result = $this->service->calculatePrice(
+            Carbon::tomorrow(),
+            Carbon::tomorrow()->addDays(3),
+            $this->cabin->id,
+            2
+        );
+
+        $this->assertEquals(540, $result['total']);
+        $this->assertEquals('Alta prioridad', $result['breakdown'][0]['price_group']);
+    }
+
+    public function test_calculates_price_prefers_most_recent_range_when_priority_ties(): void
+    {
+        $olderGroup = PriceGroup::factory()->create([
+            'tenant_id' => $this->localTenant->id,
+            'name' => 'Rango viejo',
+            'price_per_night' => 130,
+            'priority' => 5,
+            'is_default' => false,
+        ]);
+
+        CabinPriceByGuests::factory()->create([
+            'tenant_id' => $this->localTenant->id,
+            'cabin_id' => $this->cabin->id,
+            'price_group_id' => $olderGroup->id,
+            'num_guests' => 2,
+            'price_per_night' => 130,
+        ]);
+
+        $newerGroup = PriceGroup::factory()->create([
+            'tenant_id' => $this->localTenant->id,
+            'name' => 'Rango nuevo',
+            'price_per_night' => 170,
+            'priority' => 5,
+            'is_default' => false,
+        ]);
+
+        CabinPriceByGuests::factory()->create([
+            'tenant_id' => $this->localTenant->id,
+            'cabin_id' => $this->cabin->id,
+            'price_group_id' => $newerGroup->id,
+            'num_guests' => 2,
+            'price_per_night' => 170,
+        ]);
+
+        PriceRange::factory()->create([
+            'tenant_id' => $this->localTenant->id,
+            'price_group_id' => $olderGroup->id,
+            'start_date' => Carbon::tomorrow(),
+            'end_date' => Carbon::tomorrow()->addDays(1),
+            'created_at' => now()->subMinute(),
+            'updated_at' => now()->subMinute(),
+        ]);
+
+        PriceRange::factory()->create([
+            'tenant_id' => $this->localTenant->id,
+            'price_group_id' => $newerGroup->id,
+            'start_date' => Carbon::tomorrow(),
+            'end_date' => Carbon::tomorrow()->addDays(1),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $result = $this->service->calculatePrice(
+            Carbon::tomorrow(),
+            Carbon::tomorrow()->addDays(2),
+            $this->cabin->id,
+            2
+        );
+
+        $this->assertEquals(340, $result['total']);
+        $this->assertEquals('Rango nuevo', $result['breakdown'][0]['price_group']);
+    }
+
     public function test_calculates_deposit_as_50_percent(): void
     {
         $checkIn = Carbon::tomorrow();
@@ -158,6 +280,24 @@ class PriceCalculatorServiceTest extends TestCase
         $result = $this->service->calculatePrice($checkIn, $checkOut, $newCabin->id, 2);
 
         $this->assertEquals(0, $result['total']);
+    }
+
+    public function test_calculate_reservable_price_rejects_missing_tariff_configuration(): void
+    {
+        $newCabin = Cabin::factory()->create([
+            'tenant_id' => $this->localTenant->id,
+            'capacity' => 4,
+        ]);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->expectExceptionMessage('No hay configuración tarifaria');
+
+        $this->service->calculateReservablePrice(
+            Carbon::tomorrow(),
+            Carbon::tomorrow()->addDays(2),
+            $newCabin,
+            2
+        );
     }
 
     public function test_generate_quote_includes_cabin_id(): void

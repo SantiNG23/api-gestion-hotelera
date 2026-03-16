@@ -9,7 +9,6 @@ use App\Models\CabinPriceByGuests;
 use App\Models\PriceGroup;
 use App\Models\PriceRange;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -36,7 +35,10 @@ class PriceGroupService extends Service
      */
     public function getPriceGroup(int $id): PriceGroup
     {
-        return $this->getByIdWith($id, ['priceRanges']);
+        /** @var PriceGroup $priceGroup */
+        $priceGroup = $this->getByIdWith($id, ['priceRanges']);
+
+        return $priceGroup;
     }
 
     /**
@@ -53,9 +55,8 @@ class PriceGroupService extends Service
     public function createPriceGroup(array $data): PriceGroup
     {
         return DB::transaction(function () use ($data) {
-            // Si se marca como default, desactivar otros defaults del mismo tenant
             if (! empty($data['is_default'])) {
-                $tenantId = $data['tenant_id'] ?? Auth::user()->tenant_id;
+                $tenantId = $this->requireTenantId();
                 $this->model->where('tenant_id', $tenantId)
                     ->where('is_default', true)
                     ->update(['is_default' => false]);
@@ -105,11 +106,10 @@ class PriceGroupService extends Service
      */
     public function getCompletePriceGroup(int $id): array
     {
-        $priceGroup = $this->model->where('tenant_id', Auth::user()->tenant_id)
-            ->with([
-                'priceRanges',
-                'cabinPricesByGuests.cabin:id,name,description,capacity,is_active',
-            ])
+        $priceGroup = $this->model->with([
+            'priceRanges',
+            'cabinPricesByGuests.cabin:id,name,description,capacity,is_active',
+        ])
             ->findOrFail($id);
 
         // Agrupar precios por cabaña, filtrando cabañas eliminadas
@@ -154,12 +154,11 @@ class PriceGroupService extends Service
         }
 
         return DB::transaction(function () use ($data) {
-            $tenantId = Auth::user()->tenant_id;
+            $tenantId = $this->requireTenantId();
 
-            // 1. Crear el PriceGroup
             $priceGroup = $this->createPriceGroup([
                 'name' => $data['name'],
-                'price_per_night' => 0,
+                'price_per_night' => $this->resolveRepresentativePricePerNight($data['cabins']),
                 'priority' => $data['priority'] ?? 0,
                 'is_default' => $data['is_default'] ?? false,
                 'tenant_id' => $tenantId,
@@ -210,10 +209,16 @@ class PriceGroupService extends Service
         }
 
         return DB::transaction(function () use ($priceGroup, $data) {
-            $tenantId = Auth::user()->tenant_id;
+            $tenantId = $this->requireTenantId();
+
+            $basicData = array_intersect_key($data, array_flip(['name', 'is_default', 'priority']));
+
+            if (isset($data['cabins'])) {
+                $basicData['price_per_night'] = $this->resolveRepresentativePricePerNight($data['cabins']);
+            }
 
             // 1. Actualizar datos básicos
-            $this->updatePriceGroup($priceGroup->id, array_intersect_key($data, array_flip(['name', 'is_default', 'priority'])));
+            $this->updatePriceGroup($priceGroup->id, $basicData);
 
             // 2. Reemplazar precios de cabañas
             if (isset($data['cabins'])) {
@@ -254,28 +259,28 @@ class PriceGroupService extends Service
     private function validateCabinsAndPrices(array $cabins): void
     {
         $seen = [];
-        $tenantId = Auth::user()->tenant_id;
+        $tenantId = $this->requireTenantId();
 
-        foreach ($cabins as $cabinData) {
-            $cabin = Cabin::findOrFail($cabinData['cabin_id']);
+        foreach ($cabins as $i => $cabinData) {
+            $cabin = Cabin::query()->withoutGlobalScope('tenant')->find($cabinData['cabin_id']);
 
-            if ($cabin->tenant_id !== $tenantId) {
+            if (! $cabin || $cabin->tenant_id !== $tenantId) {
                 throw ValidationException::withMessages([
-                    'cabins' => ['La cabaña no pertenece a tu cuenta'],
+                    "cabins.{$i}.cabin_id" => ['La cabaña no pertenece al tenant activo.'],
                 ]);
             }
 
-            foreach ($cabinData['prices'] as $priceData) {
+            foreach ($cabinData['prices'] as $j => $priceData) {
                 if ($priceData['num_guests'] > $cabin->capacity) {
                     throw ValidationException::withMessages([
-                        'cabins.prices' => ["La cantidad de huéspedes ({$priceData['num_guests']}) excede la capacidad de '{$cabin->name}' ({$cabin->capacity})"],
+                        "cabins.{$i}.prices.{$j}.num_guests" => ["La cantidad de huéspedes ({$priceData['num_guests']}) excede la capacidad de '{$cabin->name}' ({$cabin->capacity})"],
                     ]);
                 }
 
                 $key = $cabinData['cabin_id'].'-'.$priceData['num_guests'];
                 if (isset($seen[$key])) {
                     throw ValidationException::withMessages([
-                        'cabins.prices' => ["Precio duplicado para {$priceData['num_guests']} huéspedes en '{$cabin->name}'"],
+                        "cabins.{$i}.prices.{$j}.num_guests" => ["Precio duplicado para {$priceData['num_guests']} huéspedes en '{$cabin->name}'"],
                     ]);
                 }
                 $seen[$key] = true;
@@ -311,5 +316,23 @@ class PriceGroupService extends Service
     protected function getGlobalSearchColumns(): array
     {
         return ['name'];
+    }
+
+    /**
+     * Calcula un precio representativo del grupo a partir del menor precio cargado.
+     */
+    private function resolveRepresentativePricePerNight(array $cabins): float
+    {
+        $prices = collect($cabins)
+            ->flatMap(fn ($cabin) => $cabin['prices'] ?? [])
+            ->pluck('price_per_night')
+            ->map(fn ($price) => (float) $price)
+            ->filter(fn ($price) => $price >= 0);
+
+        if ($prices->isEmpty()) {
+            return 0.0;
+        }
+
+        return round((float) $prices->min(), 2);
     }
 }

@@ -6,97 +6,96 @@ namespace Tests\Feature;
 
 use App\Models\Cabin;
 use App\Models\Reservation;
+use App\Models\Tenant;
+use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Artisan;
 use Tests\TestCase;
 
 class CancelExpiredPendingReservationsCommandTest extends TestCase
 {
-    public function test_command_cancels_expired_pending_reservations(): void
+    public function test_command_fails_without_explicit_tenant_context(): void
     {
-        // Setup
-        $auth = $this->createAuthenticatedUser();
-        $this->actingAs($auth['user']);
-
-        // Crear una cabaña de prueba
-        $cabin = Cabin::factory()->create([
-            'tenant_id' => $this->tenant->id,
-        ]);
-
-        // Crear una reserva expirada
-        $expiredReservation = Reservation::factory()->create([
-            'tenant_id' => $this->tenant->id,
-            'cabin_id' => $cabin->id,
-            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
-            'pending_until' => now()->subHours(1),
-        ]);
-
-        // Crear una reserva válida
-        $validReservation = Reservation::factory()->create([
-            'tenant_id' => $this->tenant->id,
-            'cabin_id' => $cabin->id,
-            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
-            'pending_until' => now()->addHours(48),
-        ]);
-
-        // Ejecutar el comando
         $exitCode = Artisan::call('reservations:cancel-expired');
 
-        // Verificaciones
-        $this->assertEquals(0, $exitCode);
-
-        // Verificar que la expirada fue cancelada
-        $expiredReservation->refresh();
-        $this->assertTrue($expiredReservation->isCancelled());
-
-        // Verificar que la válida sigue pendiente
-        $validReservation->refresh();
-        $this->assertTrue($validReservation->isPendingConfirmation());
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('Falta contexto tenant activo', Artisan::output());
+        $this->assertNull(app(TenantContext::class)->id());
     }
 
-    public function test_command_output_shows_cancellation_count(): void
+    public function test_command_cancels_expired_pending_reservations_for_explicit_tenant(): void
     {
-        // Setup
-        $auth = $this->createAuthenticatedUser();
-        $this->actingAs($auth['user']);
+        $tenant = Tenant::factory()->create();
 
-        // Crear una cabaña de prueba
-        $cabin = Cabin::factory()->create([
-            'tenant_id' => $this->tenant->id,
-        ]);
+        [, $expiredReservation, $validReservation] = $this->runInTenantContext($tenant->id, function () use ($tenant): array {
+            $cabin = Cabin::factory()->create([
+                'tenant_id' => $tenant->id,
+            ]);
 
-        // Crear 3 reservas expiradas
-        for ($i = 0; $i < 3; $i++) {
-            Reservation::factory()->create([
-                'tenant_id' => $this->tenant->id,
+            $expiredReservation = Reservation::factory()->create([
+                'tenant_id' => $tenant->id,
                 'cabin_id' => $cabin->id,
                 'status' => Reservation::STATUS_PENDING_CONFIRMATION,
-                'pending_until' => now()->subHours($i + 1),
+                'pending_until' => now()->subHour(),
             ]);
-        }
 
-        // Ejecutar el comando
-        Artisan::call('reservations:cancel-expired');
+            $validReservation = Reservation::factory()->create([
+                'tenant_id' => $tenant->id,
+                'cabin_id' => $cabin->id,
+                'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+                'pending_until' => now()->addHours(48),
+            ]);
 
-        // Verificar que el output contiene el mensaje correcto
-        $output = Artisan::output();
-        $this->assertStringContainsString('Reservas canceladas: 3', $output);
-        $this->assertStringContainsString('Operación completada', $output);
+            return [$cabin, $expiredReservation, $validReservation];
+        });
+
+        $exitCode = Artisan::call('reservations:cancel-expired', [
+            '--tenant' => $tenant->id,
+        ]);
+
+        $this->assertSame(0, $exitCode);
+        $this->runInTenantContext($tenant->id, function () use ($expiredReservation, $validReservation): void {
+            $expiredReservation->refresh();
+            $this->assertTrue($expiredReservation->isCancelled());
+
+            $validReservation->refresh();
+            $this->assertTrue($validReservation->isPendingConfirmation());
+        });
+        $this->assertStringContainsString('Reservas canceladas: 1', Artisan::output());
+        $this->assertNull(app(TenantContext::class)->id());
     }
 
-    public function test_command_returns_success_when_no_expired_reservations(): void
+    public function test_command_allows_explicit_admin_mode_for_all_tenants(): void
     {
-        // Setup
-        $auth = $this->createAuthenticatedUser();
-        $this->actingAs($auth['user']);
+        $firstTenant = Tenant::factory()->create();
+        $secondTenant = Tenant::factory()->create();
 
-        // Ejecutar el comando sin reservas expiradas
-        $exitCode = Artisan::call('reservations:cancel-expired');
+        foreach ([$firstTenant, $secondTenant] as $tenant) {
+            $this->runInTenantContext($tenant->id, function () use ($tenant): void {
+                $cabin = Cabin::factory()->create([
+                    'tenant_id' => $tenant->id,
+                ]);
 
-        // Verificar que fue exitoso
-        $this->assertEquals(0, $exitCode);
+                Reservation::factory()->create([
+                    'tenant_id' => $tenant->id,
+                    'cabin_id' => $cabin->id,
+                    'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+                    'pending_until' => now()->subHour(),
+                ]);
+            });
+        }
 
-        // Verificar que el output muestra 0 canceladas
-        $output = Artisan::output();
-        $this->assertStringContainsString('Reservas canceladas: 0', $output);
+        $exitCode = Artisan::call('reservations:cancel-expired', [
+            '--all-tenants' => true,
+        ]);
+
+        $this->assertSame(0, $exitCode);
+        foreach ([$firstTenant, $secondTenant] as $tenant) {
+            $this->runInTenantContext($tenant->id, function (): void {
+                $this->assertSame(0, Reservation::query()->where('status', Reservation::STATUS_PENDING_CONFIRMATION)->count());
+                $this->assertSame(1, Reservation::query()->where('status', Reservation::STATUS_CANCELLED)->count());
+            });
+        }
+        $this->assertStringContainsString('Modo administrativo --all-tenants habilitado.', Artisan::output());
+        $this->assertNull(app(TenantContext::class)->id());
     }
 }

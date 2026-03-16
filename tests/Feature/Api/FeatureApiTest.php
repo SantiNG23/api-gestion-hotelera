@@ -70,6 +70,26 @@ class FeatureApiTest extends TestCase
         $response->assertJsonPath('data.is_active', false);
     }
 
+    public function test_can_update_feature_without_name(): void
+    {
+        $feature = Feature::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'WiFi',
+            'icon' => 'wifi',
+            'is_active' => true,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->patchJson("/api/v1/features/{$feature->id}", [
+                'is_active' => false,
+            ]);
+
+        $this->assertApiResponse($response);
+        $response->assertJsonPath('data.name', 'WiFi');
+        $response->assertJsonPath('data.icon', 'wifi');
+        $response->assertJsonPath('data.is_active', false);
+    }
+
     public function test_can_delete_feature(): void
     {
         $feature = Feature::factory()->create(['tenant_id' => $this->tenant->id]);

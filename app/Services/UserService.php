@@ -29,8 +29,14 @@ class UserService extends Service
      */
     public function updatePassword(User $user, string $password): bool
     {
-        return $user->update([
+        $updated = $user->update([
             'password' => Hash::make($password),
         ]);
+
+        if ($updated) {
+            $user->tokens()->delete();
+        }
+
+        return $updated;
     }
 }

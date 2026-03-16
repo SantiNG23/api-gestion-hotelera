@@ -8,7 +8,6 @@ use App\Models\PriceGroup;
 use App\Models\PriceRange;
 use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 
 class PriceRangeService extends Service
@@ -34,7 +33,10 @@ class PriceRangeService extends Service
      */
     public function getPriceRange(int $id): PriceRange
     {
-        return $this->getByIdWith($id, ['priceGroup']);
+        /** @var PriceRange $priceRange */
+        $priceRange = $this->getByIdWith($id, ['priceGroup']);
+
+        return $priceRange;
     }
 
     /**
@@ -50,7 +52,10 @@ class PriceRangeService extends Service
         // Asegurar que el tenant_id coincida con el del grupo
         $data['tenant_id'] = $priceGroup->tenant_id;
 
-        return $this->create($data);
+        /** @var PriceRange $priceRange */
+        $priceRange = $this->create($data);
+
+        return $priceRange;
     }
 
     /**
@@ -64,7 +69,10 @@ class PriceRangeService extends Service
             $this->getPriceGroupOrThrow($data['price_group_id']);
         }
 
-        return $this->update($id, $data);
+        /** @var PriceRange $priceRange */
+        $priceRange = $this->update($id, $data);
+
+        return $priceRange;
     }
 
     /**
@@ -80,11 +88,17 @@ class PriceRangeService extends Service
      */
     public function getPriceRangeForDate(Carbon $date): ?PriceRange
     {
-        return $this->model
+        $activePriceRanges = $this->model
             ->whereDate('start_date', '<=', $date)
             ->whereDate('end_date', '>=', $date)
             ->with('priceGroup')
-            ->first();
+            ->get();
+
+        if ($activePriceRanges->isEmpty()) {
+            return null;
+        }
+
+        return $this->selectWinningRange($activePriceRanges);
     }
 
     /**
@@ -103,24 +117,26 @@ class PriceRangeService extends Service
     ): array {
         $start = Carbon::parse($startDate)->startOfDay();
         $end = Carbon::parse($endDate)->endOfDay();
+        $currentTenantId = $this->requireTenantId();
 
-        if (! $tenantId) {
-            $tenantId = Auth::user()?->tenant_id;
+        if ($tenantId === null) {
+            $tenantId = $currentTenantId;
         }
 
-        // Obtener todos los rangos que tocan el período
+        if ($tenantId !== $currentTenantId) {
+            throw ValidationException::withMessages([
+                'tenant_id' => ['El acceso cross-tenant requiere un flujo administrativo explicito.'],
+            ]);
+        }
+
         $priceRanges = $this->model
-            ->withoutGlobalScope('tenant')
             ->where('tenant_id', $tenantId)
             ->where('end_date', '>=', $start)
             ->where('start_date', '<=', $end)
-            ->with(['priceGroup' => function ($query) {
-                $query->withoutGlobalScope('tenant');
-            }])
+            ->with('priceGroup')
             ->get();
 
-        // Obtener el grupo por defecto del tenant
-        $defaultGroup = PriceGroup::withoutGlobalScope('tenant')
+        $defaultGroup = PriceGroup::query()
             ->where('tenant_id', $tenantId)
             ->where('is_default', true)
             ->first();
@@ -140,29 +156,16 @@ class PriceRangeService extends Service
 
             if ($activePriceRanges->isNotEmpty()) {
                 // Ordenar por prioridad DESC, luego por created_at DESC
-                $winnerRange = $activePriceRanges
-                    ->sort(function ($a, $b) {
-                        if ($a->priceGroup->priority !== $b->priceGroup->priority) {
-                            return $b->priceGroup->priority <=> $a->priceGroup->priority;
-                        }
-
-                        return $b->created_at <=> $a->created_at;
-                    })
-                    ->first();
-
-                // Si hay múltiples con la misma prioridad, seleccionar el más reciente
-                $sameMaxPriority = $activePriceRanges->filter(function ($range) use ($winnerRange) {
-                    return $range->priceGroup->priority === $winnerRange->priceGroup->priority;
-                });
+                $winnerRange = $this->selectWinningRange($activePriceRanges);
 
                 $result[$dayString] = [
-                    'price' => (float) $winnerRange->priceGroup->price_per_night,
+                    'price' => $this->resolveDisplayPrice($winnerRange->priceGroup),
                     'group_name' => $winnerRange->priceGroup->name,
                 ];
             } elseif ($defaultGroup) {
                 // Fallback al grupo por defecto
                 $result[$dayString] = [
-                    'price' => (float) $defaultGroup->price_per_night,
+                    'price' => $this->resolveDisplayPrice($defaultGroup),
                     'group_name' => $defaultGroup->name,
                 ];
             } else {
@@ -203,5 +206,40 @@ class PriceRangeService extends Service
     protected function getDateColumn(): string
     {
         return 'start_date';
+    }
+
+    /**
+     * Selecciona el rango ganador usando el mismo criterio en todos los flujos.
+     */
+    private function selectWinningRange($activePriceRanges): ?PriceRange
+    {
+        return $activePriceRanges
+            ->sort(function ($a, $b) {
+                if ($a->priceGroup->priority !== $b->priceGroup->priority) {
+                    return $b->priceGroup->priority <=> $a->priceGroup->priority;
+                }
+
+                return $b->created_at <=> $a->created_at;
+            })
+            ->first();
+    }
+
+    /**
+     * Obtiene un precio visible para el grupo.
+     *
+     * Si el grupo fue creado vía flujo complete y quedó con `price_per_night = 0`,
+     * usa el menor precio configurado por cabaña/huesped como valor representativo.
+     */
+    private function resolveDisplayPrice(PriceGroup $priceGroup): float
+    {
+        $groupPrice = (float) $priceGroup->price_per_night;
+
+        if ($groupPrice > 0) {
+            return $groupPrice;
+        }
+
+        $fallbackPrice = $priceGroup->cabinPricesByGuests()->min('price_per_night');
+
+        return $fallbackPrice !== null ? (float) $fallbackPrice : 0.0;
     }
 }

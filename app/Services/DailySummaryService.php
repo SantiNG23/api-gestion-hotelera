@@ -50,7 +50,11 @@ class DailySummaryService
     {
         return Reservation::whereDate('check_in_date', $date)
             ->where('status', Reservation::STATUS_CONFIRMED)
-            ->with(['client', 'cabin', 'guests'])
+            ->with([
+                'client' => fn ($query) => $query->withTrashed(),
+                'cabin' => fn ($query) => $query->withTrashed(),
+                'guests',
+            ])
             ->orderBy('cabin_id')
             ->get();
     }
@@ -66,7 +70,10 @@ class DailySummaryService
             ->whereIn('status', [
                 Reservation::STATUS_CHECKED_IN,
             ])
-            ->with(['client', 'cabin'])
+            ->with([
+                'client' => fn ($query) => $query->withTrashed(),
+                'cabin' => fn ($query) => $query->withTrashed(),
+            ])
             ->orderBy('cabin_id')
             ->get();
     }
@@ -92,7 +99,11 @@ class DailySummaryService
                         $q->where('payment_type', 'balance');
                     });
             })
-            ->with(['client', 'cabin', 'payments'])
+            ->with([
+                'client' => fn ($query) => $query->withTrashed(),
+                'cabin' => fn ($query) => $query->withTrashed(),
+                'payments',
+            ])
             ->orderBy('pending_until')
             ->orderBy('check_in_date')
             ->get();

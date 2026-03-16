@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
+
 class CalculatePriceRequest extends ApiRequest
 {
     /**
@@ -13,8 +16,15 @@ class CalculatePriceRequest extends ApiRequest
      */
     public function rules(): array
     {
+        $tenantId = Auth::user()?->tenant_id;
+        $cabinExistsRule = Rule::exists('cabins', 'id');
+
+        if ($tenantId !== null) {
+            $cabinExistsRule = $cabinExistsRule->where('tenant_id', $tenantId);
+        }
+
         return [
-            'cabin_id' => ['required', 'integer', 'exists:cabins,id'],
+            'cabin_id' => ['required', 'integer', $cabinExistsRule],
             'check_in_date' => ['required', 'date', 'date_format:Y-m-d', 'after_or_equal:today'],
             'check_out_date' => ['required', 'date', 'date_format:Y-m-d', 'after:check_in_date'],
             'num_guests' => ['required', 'integer', 'min:2', 'max:255'],
@@ -30,7 +40,7 @@ class CalculatePriceRequest extends ApiRequest
     {
         return [
             'cabin_id.required' => 'La cabaña es obligatoria',
-            'cabin_id.exists' => 'La cabaña seleccionada no existe',
+            'cabin_id.exists' => 'La cabaña seleccionada no existe o no pertenece a tu organización',
             'check_in_date.required' => 'La fecha de check-in es obligatoria',
             'check_in_date.date_format' => 'La fecha de check-in debe tener el formato YYYY-MM-DD',
             'check_in_date.after_or_equal' => 'La fecha de check-in debe ser hoy o posterior',

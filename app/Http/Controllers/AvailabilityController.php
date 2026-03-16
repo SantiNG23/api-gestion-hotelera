@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\AvailabilityCalendarRequest;
 use App\Http\Requests\AvailabilityCheckRequest;
 use App\Http\Requests\AvailabilityShowRequest;
+use App\Http\Resources\CabinResource;
 use App\Models\Cabin;
 use App\Services\AvailabilityService;
 use Carbon\Carbon;
@@ -48,7 +49,7 @@ class AvailabilityController extends Controller
         return $this->successResponse([
             'check_in_date' => $checkIn->format('Y-m-d'),
             'check_out_date' => $checkOut->format('Y-m-d'),
-            'available_cabins' => $this->transformResource($availableCabins),
+            'available_cabins' => CabinResource::collection($availableCabins),
             'available_count' => $availableCabins->count(),
         ]);
     }

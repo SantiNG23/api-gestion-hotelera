@@ -16,6 +16,8 @@ class UserRequest extends ApiRequest
      */
     public function rules(): array
     {
+        $tenantId = Auth::user()?->tenant_id;
+
         // Reglas comunes para todas las peticiones
         $rules = [
             'name' => [
@@ -27,7 +29,9 @@ class UserRequest extends ApiRequest
             'email' => [
                 'email',
                 'max:255',
-                Rule::unique('users', 'email')->ignore(Auth::id()),
+                Rule::unique('users', 'email')
+                    ->ignore(Auth::id())
+                    ->where('tenant_id', $tenantId),
             ],
         ];
 

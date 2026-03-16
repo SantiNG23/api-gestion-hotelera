@@ -11,6 +11,7 @@ use App\Models\Client;
 use App\Models\PriceGroup;
 use App\Models\Reservation;
 use App\Models\ReservationPayment;
+use App\Models\Tenant;
 use App\Services\ReservationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Event;
@@ -238,7 +239,10 @@ class ReservationServiceTest extends TestCase
         $this->assertEquals(150, $reservation->deposit_amount); // 50%
         $this->assertEquals(150, $reservation->balance_amount); // 50%
         $this->assertFalse($reservation->is_blocked);
-        Event::assertDispatched(ReservationCreated::class);
+        Event::assertDispatched(ReservationCreated::class, function (ReservationCreated $event): bool {
+            return $event->tenantId === $this->tenant->id
+                && $event->reservationId > 0;
+        });
     }
 
     public function test_create_reservation_with_guests(): void
@@ -355,7 +359,10 @@ class ReservationServiceTest extends TestCase
 
         $this->service->createReservation($data);
 
-        Event::assertDispatched(ReservationCreated::class);
+        Event::assertDispatched(ReservationCreated::class, function (ReservationCreated $event): bool {
+            return $event->tenantId === $this->tenant->id
+                && $event->reservationId > 0;
+        });
     }
 
     public function test_create_reservation_without_required_dni(): void
@@ -373,6 +380,26 @@ class ReservationServiceTest extends TestCase
 
         $this->expectException(ValidationException::class);
         $this->service->createReservation($data);
+    }
+
+    public function test_create_reservation_rejects_payload_tenant_override(): void
+    {
+        $otherTenant = Tenant::factory()->create();
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('tenant_id');
+
+        $this->service->createReservation([
+            'tenant_id' => $otherTenant->id,
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
+            'num_guests' => 2,
+            'client' => [
+                'name' => 'Payload Override',
+                'dni' => '67676767',
+            ],
+        ]);
     }
 
     // ============= updateReservation() - 5 tests =============
@@ -418,7 +445,7 @@ class ReservationServiceTest extends TestCase
 
         // 4 noches x 100 = 400
         $this->assertEquals(400, $updated->total_price);
-        $this->assertEquals($newCheckIn->format('Y-m-d'), $updated->check_in_date->format('Y-m-d'));
+        $this->assertEquals($newCheckIn->format('Y-m-d'), Carbon::parse($updated->check_in_date)->format('Y-m-d'));
     }
 
     public function test_update_reservation_cabin_recalculates_price(): void
@@ -440,6 +467,51 @@ class ReservationServiceTest extends TestCase
         // Cambio de cabaña, precio diferente (3 noches x 80 = 240)
         $this->assertEquals($this->otherCabin->id, $updated->cabin_id);
         $this->assertEquals(240, $updated->total_price);
+    }
+
+    public function test_update_reservation_uses_effective_state_for_capacity_validation(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'check_in_date' => Carbon::tomorrow(),
+            'check_out_date' => Carbon::tomorrow()->addDays(3),
+            'num_guests' => 4,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+        ]);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('capacidad para 2 personas');
+
+        $this->service->updateReservation($reservation->id, [
+            'cabin_id' => $this->otherCabin->id,
+        ]);
+    }
+
+    public function test_update_reservation_rejects_missing_tariff_configuration_for_normal_reservation(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'check_in_date' => Carbon::tomorrow(),
+            'check_out_date' => Carbon::tomorrow()->addDays(3),
+            'num_guests' => 2,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+        ]);
+
+        $cabinWithoutTariff = Cabin::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'capacity' => 4,
+        ]);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('No hay configuración tarifaria');
+
+        $this->service->updateReservation($reservation->id, [
+            'cabin_id' => $cabinWithoutTariff->id,
+        ]);
     }
 
     public function test_update_reservation_cannot_modify_finished(): void
@@ -469,6 +541,26 @@ class ReservationServiceTest extends TestCase
         $this->expectException(ValidationException::class);
         $this->service->updateReservation($reservation->id, [
             'notes' => 'Should fail',
+        ]);
+    }
+
+    public function test_update_reservation_rejects_payload_tenant_override(): void
+    {
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+        ]);
+
+        $otherTenant = Tenant::factory()->create();
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('tenant_id');
+
+        $this->service->updateReservation($reservation->id, [
+            'tenant_id' => $otherTenant->id,
+            'notes' => 'Intento de override',
         ]);
     }
 
@@ -772,6 +864,7 @@ class ReservationServiceTest extends TestCase
             'tenant_id' => $this->tenant->id,
             'cabin_id' => $this->cabin->id,
             'client_id' => $this->client->id,
+            'num_guests' => 5,
             'is_blocked' => false,
             'total_price' => 300,
             'status' => Reservation::STATUS_PENDING_CONFIRMATION,
@@ -785,6 +878,7 @@ class ReservationServiceTest extends TestCase
         $this->assertTrue($updated->is_blocked);
         $this->assertEquals(0, $updated->total_price);
         $this->assertEquals(Client::DNI_BLOCK, $updated->client->dni);
+        $this->assertNull($updated->pending_until);
     }
 
     public function test_convert_blocked_to_regular_reservation(): void
@@ -813,6 +907,8 @@ class ReservationServiceTest extends TestCase
         $this->assertFalse($updated->is_blocked);
         $this->assertGreaterThan(0, $updated->total_price);
         $this->assertNotEquals(Client::DNI_BLOCK, $updated->client->dni);
+        $this->assertNotNull($updated->pending_until);
+        $this->assertTrue($updated->pending_until->isFuture());
     }
 
     public function test_blocked_reservation_can_be_confirmed_with_zero_deposit(): void

@@ -176,17 +176,10 @@ class ReservationController extends Controller
 
         $cabin = Cabin::findOrFail($validated['cabin_id']);
 
-        // Validar que num_guests no exceda la capacidad
-        if ($validated['num_guests'] > $cabin->capacity) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'num_guests' => ["La cabaña '{$cabin->name}' tiene capacidad para {$cabin->capacity} personas máximo"],
-            ]);
-        }
-
         $checkIn = \Carbon\Carbon::parse($validated['check_in_date']);
         $checkOut = \Carbon\Carbon::parse($validated['check_out_date']);
 
-        $priceDetails = $priceCalculator->calculatePrice($checkIn, $checkOut, $cabin->id, (int) $validated['num_guests']);
+        $priceDetails = $priceCalculator->calculateReservablePrice($checkIn, $checkOut, $cabin, (int) $validated['num_guests']);
 
         return $this->successResponse([
             'cabin_id' => $cabin->id,
