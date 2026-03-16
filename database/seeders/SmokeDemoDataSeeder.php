@@ -85,17 +85,28 @@ class SmokeDemoDataSeeder extends Seeder
         $tenantId = app(TenantContext::class)->requireId();
 
         foreach ($featureBlueprints as $featureBlueprint) {
-            $features[$featureBlueprint['key']] = Feature::query()->updateOrCreate(
-                [
-                    'tenant_id' => $tenantId,
-                    'name' => $featureBlueprint['name'],
-                ],
-                [
-                    'tenant_id' => $tenantId,
-                    'icon' => $featureBlueprint['icon'],
-                    'is_active' => true,
-                ]
-            );
+            /** @var Feature $feature */
+            $feature = Feature::withTrashed()->firstOrNew([
+                'tenant_id' => $tenantId,
+                'name' => $featureBlueprint['name'],
+            ]);
+
+            $feature->fill([
+                'tenant_id' => $tenantId,
+                'icon' => $featureBlueprint['icon'],
+                'is_active' => true,
+            ]);
+            $feature->save();
+
+            if ($featureBlueprint['deleted'] ?? false) {
+                if (! $feature->trashed()) {
+                    $feature->delete();
+                }
+            } elseif ($feature->trashed()) {
+                $feature->restore();
+            }
+
+            $features[$featureBlueprint['key']] = $feature->fresh();
         }
 
         return $features;
@@ -107,18 +118,27 @@ class SmokeDemoDataSeeder extends Seeder
         $tenantId = app(TenantContext::class)->requireId();
 
         foreach ($cabinBlueprints as $cabinBlueprint) {
-            $cabin = Cabin::query()->updateOrCreate(
-                [
-                    'tenant_id' => $tenantId,
-                    'name' => $cabinBlueprint['name'],
-                ],
-                [
-                    'tenant_id' => $tenantId,
-                    'description' => $cabinBlueprint['description'],
-                    'capacity' => $cabinBlueprint['capacity'],
-                    'is_active' => true,
-                ]
-            );
+            /** @var Cabin $cabin */
+            $cabin = Cabin::withTrashed()->firstOrNew([
+                'tenant_id' => $tenantId,
+                'name' => $cabinBlueprint['name'],
+            ]);
+
+            $cabin->fill([
+                'tenant_id' => $tenantId,
+                'description' => $cabinBlueprint['description'],
+                'capacity' => $cabinBlueprint['capacity'],
+                'is_active' => $cabinBlueprint['is_active'] ?? true,
+            ]);
+            $cabin->save();
+
+            if ($cabinBlueprint['deleted'] ?? false) {
+                if (! $cabin->trashed()) {
+                    $cabin->delete();
+                }
+            } elseif ($cabin->trashed()) {
+                $cabin->restore();
+            }
 
             $cabin->features()->sync(
                 collect($cabinBlueprint['feature_keys'])
@@ -126,7 +146,7 @@ class SmokeDemoDataSeeder extends Seeder
                     ->all()
             );
 
-            $cabins[$cabinBlueprint['key']] = $cabin->fresh('features');
+            $cabins[$cabinBlueprint['key']] = $cabin->fresh(['features']);
         }
 
         return $cabins;
@@ -203,20 +223,31 @@ class SmokeDemoDataSeeder extends Seeder
         $tenantId = app(TenantContext::class)->requireId();
 
         foreach ($clientBlueprints as $clientBlueprint) {
-            $clients[$clientBlueprint['key']] = Client::query()->updateOrCreate(
-                [
-                    'tenant_id' => $tenantId,
-                    'dni' => $clientBlueprint['dni'],
-                ],
-                [
-                    'tenant_id' => $tenantId,
-                    'name' => $clientBlueprint['name'],
-                    'age' => $clientBlueprint['age'],
-                    'city' => $clientBlueprint['city'],
-                    'phone' => $clientBlueprint['phone'],
-                    'email' => $clientBlueprint['email'],
-                ]
-            );
+            /** @var Client $client */
+            $client = Client::withTrashed()->firstOrNew([
+                'tenant_id' => $tenantId,
+                'dni' => $clientBlueprint['dni'],
+            ]);
+
+            $client->fill([
+                'tenant_id' => $tenantId,
+                'name' => $clientBlueprint['name'],
+                'age' => $clientBlueprint['age'],
+                'city' => $clientBlueprint['city'],
+                'phone' => $clientBlueprint['phone'],
+                'email' => $clientBlueprint['email'],
+            ]);
+            $client->save();
+
+            if ($clientBlueprint['deleted'] ?? false) {
+                if (! $client->trashed()) {
+                    $client->delete();
+                }
+            } elseif ($client->trashed()) {
+                $client->restore();
+            }
+
+            $clients[$clientBlueprint['key']] = $client->fresh();
         }
 
         return $clients;
@@ -276,10 +307,26 @@ class SmokeDemoDataSeeder extends Seeder
             }
 
             if (($reservationBlueprint['check_in'] ?? false) === true) {
-                $reservationService->checkIn($reservation->id, [
+                $reservation = $reservationService->checkIn($reservation->id, [
                     'payment_method' => 'efectivo',
                     'paid_at' => $reservationBlueprint['balance_paid_at'] ?? $reservationBlueprint['check_in_date'].' 14:00:00',
                 ]);
+            }
+
+            if (($reservationBlueprint['check_out'] ?? false) === true) {
+                $reservation = $reservationService->checkOut($reservation->id);
+            }
+
+            if (($reservationBlueprint['cancel'] ?? false) === true) {
+                $reservation = $reservationService->cancel($reservation->id);
+            }
+
+            if (($reservationBlueprint['delete_client_after'] ?? false) === true) {
+                $reservation->client()->withTrashed()->first()?->delete();
+            }
+
+            if (($reservationBlueprint['delete_cabin_after'] ?? false) === true) {
+                $reservation->cabin()->withTrashed()->first()?->delete();
             }
         }
     }
@@ -321,6 +368,20 @@ class SmokeDemoDataSeeder extends Seeder
                         'description' => 'Cabana para smoke de pendientes, bloqueos y calendar.',
                         'capacity' => 4,
                         'feature_keys' => ['wifi', 'parrilla', 'jacuzzi'],
+                    ],
+                    [
+                        'key' => 'sauce',
+                        'name' => 'SMOKE A | Sauce Historial',
+                        'description' => 'Cabana activa para historial de cliente y bajas logicas.',
+                        'capacity' => 5,
+                        'feature_keys' => ['wifi', 'cochera'],
+                    ],
+                    [
+                        'key' => 'arrayan',
+                        'name' => 'SMOKE A | Arrayan Archivada',
+                        'description' => 'Cabana archivada para validar relaciones historicas con soft delete.',
+                        'capacity' => 3,
+                        'feature_keys' => ['wifi', 'jacuzzi'],
                     ],
                 ],
                 'price_groups' => [
@@ -405,6 +466,33 @@ class SmokeDemoDataSeeder extends Seeder
                         'phone' => '3514123403',
                         'email' => 'pendiente.a@miradordeluz.test',
                     ],
+                    [
+                        'key' => 'historial',
+                        'name' => 'SMOKE Historial A',
+                        'dni' => '41000014',
+                        'age' => 46,
+                        'city' => 'San Rafael',
+                        'phone' => '2604123404',
+                        'email' => 'historial.a@miradordeluz.test',
+                    ],
+                    [
+                        'key' => 'archivado',
+                        'name' => 'SMOKE Archivado A',
+                        'dni' => '41000015',
+                        'age' => 52,
+                        'city' => 'Trelew',
+                        'phone' => '2804123405',
+                        'email' => 'archivado.a@miradordeluz.test',
+                    ],
+                    [
+                        'key' => 'cliente_baja',
+                        'name' => 'SMOKE Cliente Baja A',
+                        'dni' => '41000016',
+                        'age' => 31,
+                        'city' => 'Esquel',
+                        'phone' => '2945412340',
+                        'email' => 'cliente.baja.a@miradordeluz.test',
+                    ],
                 ],
                 'reservations' => [
                     [
@@ -455,6 +543,90 @@ class SmokeDemoDataSeeder extends Seeder
                         'num_guests' => 1,
                         'notes' => '[SMOKE:A:BLOCKED]',
                         'is_blocked' => true,
+                    ],
+                    [
+                        'client_key' => 'historial',
+                        'cabin_key' => 'sauce',
+                        'check_in_date' => '2030-03-20',
+                        'check_out_date' => '2030-03-23',
+                        'num_guests' => 3,
+                        'notes' => '[SMOKE:A:HISTORY_FINISHED]',
+                        'confirm' => true,
+                        'pay_balance' => true,
+                        'check_in' => true,
+                        'check_out' => true,
+                        'deposit_paid_at' => '2030-03-18 09:30:00',
+                        'balance_paid_at' => '2030-03-20 14:00:00',
+                        'guests' => [
+                            [
+                                'name' => 'SMOKE Historial Guest A1',
+                                'dni' => '51000002',
+                                'age' => 28,
+                                'city' => 'San Rafael',
+                            ],
+                            [
+                                'name' => 'SMOKE Historial Guest A2',
+                                'dni' => '51000003',
+                                'age' => 27,
+                                'city' => 'San Rafael',
+                            ],
+                        ],
+                    ],
+                    [
+                        'client_key' => 'historial',
+                        'cabin_key' => 'alerce',
+                        'check_in_date' => '2030-06-01',
+                        'check_out_date' => '2030-06-04',
+                        'num_guests' => 2,
+                        'notes' => '[SMOKE:A:HISTORY_CANCELLED]',
+                        'confirm' => true,
+                        'cancel' => true,
+                        'deposit_paid_at' => '2030-05-20 10:15:00',
+                    ],
+                    [
+                        'client_key' => 'historial',
+                        'cabin_key' => 'coihue',
+                        'check_in_date' => '2030-04-22',
+                        'check_out_date' => '2030-04-24',
+                        'num_guests' => 2,
+                        'notes' => '[SMOKE:A:HISTORY_CONFIRMED]',
+                        'confirm' => true,
+                        'deposit_paid_at' => '2030-04-18 16:00:00',
+                    ],
+                    [
+                        'client_key' => 'pendiente',
+                        'cabin_key' => 'coihue',
+                        'check_in_date' => '2030-04-25',
+                        'check_out_date' => '2030-04-27',
+                        'num_guests' => 2,
+                        'notes' => '[SMOKE:A:PENDING_EXPIRED]',
+                        'pending_until' => now()->subDay()->format('Y-m-d H:i:s'),
+                    ],
+                    [
+                        'client_key' => 'archivado',
+                        'cabin_key' => 'arrayan',
+                        'check_in_date' => '2030-02-10',
+                        'check_out_date' => '2030-02-12',
+                        'num_guests' => 2,
+                        'notes' => '[SMOKE:A:ARCHIVED_RELATIONS]',
+                        'confirm' => true,
+                        'pay_balance' => true,
+                        'check_in' => true,
+                        'check_out' => true,
+                        'deposit_paid_at' => '2030-02-01 09:00:00',
+                        'balance_paid_at' => '2030-02-10 12:00:00',
+                        'delete_client_after' => true,
+                        'delete_cabin_after' => true,
+                    ],
+                    [
+                        'client_key' => 'cliente_baja',
+                        'cabin_key' => 'sauce',
+                        'check_in_date' => '2030-08-10',
+                        'check_out_date' => '2030-08-12',
+                        'num_guests' => 2,
+                        'notes' => '[SMOKE:A:CLIENT_DELETE_TARGET]',
+                        'confirm' => true,
+                        'deposit_paid_at' => '2030-08-01 11:00:00',
                     ],
                 ],
             ],

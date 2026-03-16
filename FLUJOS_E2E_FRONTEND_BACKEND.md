@@ -22,6 +22,10 @@ Fecha: 2026-03-12
 - Fecha ancla para smoke de calendar y daily summary: `2030-04-10`
 - Cabanas base tenant A: `SMOKE A | Alerce Familiar`, `SMOKE A | Cipres Pareja`, `SMOKE A | Coihue Grupo`
 - Reserva resumen tenant A: `Alerce` check-in `2030-04-10`, `Cipres` check-out `2030-04-10`, `Coihue` pendiente `2030-04-10`, bloqueo `2030-04-15 -> 2030-04-18`
+- Fixture secundario critico tenant A: cliente `SMOKE Historial A` con reservas `finished`, `cancelled` y `confirmed`
+- Fixture secundario critico tenant A: reserva `[SMOKE:A:ARCHIVED_RELATIONS]` conserva cliente y cabana soft-deleted en detalle historico
+- Fixture secundario critico tenant A: `Coihue` agrega pending vencida `2030-04-25 -> 2030-04-27` que NO debe bloquear `availability/{cabin_id}`
+- Targets para bajas logicas: cliente `SMOKE Cliente Baja A` y cabana `SMOKE A | Sauce Historial` quedan activos con historia asociada
 
 ## Supuestos base de todo E2E
 
