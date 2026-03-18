@@ -139,9 +139,10 @@ class UserApiTest extends TestCase
 
         $this->assertCount(0, $this->localUser->fresh()->tokens);
 
-        $response = $this->postJson('/api/v1/auth', [
+        $response = $this->postJson('/api/v1/auth/login', [
             'email' => $this->localUser->email,
             'password' => 'NewPassword123!',
+            'tenant_slug' => $this->localUser->tenant->slug,
         ]);
 
         $response->assertStatus(200)

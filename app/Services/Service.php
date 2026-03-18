@@ -205,25 +205,24 @@ abstract class Service
                 continue;
             }
 
-            // 1. Normalización de tipo (Cast inteligente para números y booleanos)
-            if (is_string($value)) {
-                if (is_numeric($value)) {
-                    $value = str_contains($value, '.') ? (float) $value : (int) $value;
-                } elseif ($value === 'true') {
-                    $value = true;
-                } elseif ($value === 'false') {
-                    $value = false;
-                }
-            }
-
-            // Nombre del método basado en el campo (ej: filterByStatus)
             $method = 'filterBy'.Str::studly($field);
 
-            // 2. Si el servicio hijo define el método, tiene prioridad
+            // Si el servicio hijo define el método, controla el valor sin normalización genérica
             if (method_exists($this, $method)) {
                 $this->$method($query, $value);
             } else {
-                // 3. Fallback automático si el campo existe en la tabla
+                // Normalización de tipo para el fallback automático
+                if (is_string($value)) {
+                    if (is_numeric($value)) {
+                        $value = str_contains($value, '.') ? (float) $value : (int) $value;
+                    } elseif ($value === 'true') {
+                        $value = true;
+                    } elseif ($value === 'false') {
+                        $value = false;
+                    }
+                }
+
+                // Fallback automático si el campo existe en la tabla
                 if (! in_array($field, $tableColumns)) {
                     continue;
                 }

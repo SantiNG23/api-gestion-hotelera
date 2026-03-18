@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\Cabin;
 use App\Models\Reservation;
+use App\Models\ReservationPayment;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -107,5 +109,73 @@ class DailySummaryService
             ->orderBy('pending_until')
             ->orderBy('check_in_date')
             ->get();
+    }
+
+    /**
+     * @return array{pending_deposits: int, scheduled_check_ins: int, estimated_occupancy: float}
+     */
+    public function getReportsSummary(Carbon $startDate, Carbon $endDate, ?int $cabinId = null): array
+    {
+        $pendingDeposits = $this->baseReportsReservationQuery($startDate, $endDate, $cabinId)
+            ->where('status', Reservation::STATUS_PENDING_CONFIRMATION)
+            ->whereDoesntHave('payments', function ($query) {
+                $query->where('payment_type', ReservationPayment::TYPE_DEPOSIT);
+            })
+            ->count();
+
+        $scheduledCheckIns = $this->baseReportsReservationQuery($startDate, $endDate, $cabinId)
+            ->where('status', Reservation::STATUS_CONFIRMED)
+            ->count();
+
+        return [
+            'pending_deposits' => $pendingDeposits,
+            'scheduled_check_ins' => $scheduledCheckIns,
+            'estimated_occupancy' => $this->calculateEstimatedOccupancy($startDate, $endDate, $cabinId),
+        ];
+    }
+
+    private function baseReportsReservationQuery(Carbon $startDate, Carbon $endDate, ?int $cabinId = null): \Illuminate\Database\Eloquent\Builder
+    {
+        return Reservation::query()
+            ->when($cabinId !== null, function ($query) use ($cabinId) {
+                $query->where('cabin_id', $cabinId);
+            })
+            ->whereBetween('check_in_date', [
+                $startDate->toDateString(),
+                $endDate->toDateString(),
+            ]);
+    }
+
+    private function calculateEstimatedOccupancy(Carbon $startDate, Carbon $endDate, ?int $cabinId = null): float
+    {
+        $rangeStart = $startDate->copy()->startOfDay();
+        $rangeEndExclusive = $endDate->copy()->addDay()->startOfDay();
+        $totalDays = $rangeStart->diffInDays($endDate->copy()->startOfDay()) + 1;
+
+        $inventoryCount = $cabinId !== null
+            ? Cabin::whereKey($cabinId)->count()
+            : Cabin::where('is_active', true)->count();
+
+        if ($inventoryCount === 0 || $totalDays === 0) {
+            return 0.0;
+        }
+
+        $occupiedUnits = Reservation::blocking()
+            ->when($cabinId !== null, function ($query) use ($cabinId) {
+                $query->where('cabin_id', $cabinId);
+            })
+            ->whereDate('check_in_date', '<', $rangeEndExclusive->toDateString())
+            ->whereDate('check_out_date', '>', $rangeStart->toDateString())
+            ->get(['check_in_date', 'check_out_date'])
+            ->sum(function (Reservation $reservation) use ($rangeStart, $rangeEndExclusive): int {
+                $occupiedStart = $reservation->check_in_date->copy()->startOfDay()->max($rangeStart);
+                $occupiedEnd = $reservation->check_out_date->copy()->startOfDay()->min($rangeEndExclusive);
+
+                return $occupiedEnd->lessThanOrEqualTo($occupiedStart)
+                    ? 0
+                    : (int) $occupiedStart->diffInDays($occupiedEnd);
+            });
+
+        return round(($occupiedUnits / ($inventoryCount * $totalDays)) * 100, 2);
     }
 }

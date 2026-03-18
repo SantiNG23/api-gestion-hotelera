@@ -209,6 +209,33 @@ class Reservation extends Model
         return $this->getBalancePayment() !== null;
     }
 
+    public function reportStatus(): string
+    {
+        if ($this->isCancelled()) {
+            return 'cancelled';
+        }
+
+        if ($this->isFinished()) {
+            return 'checked_out';
+        }
+
+        if ($this->isCheckedIn()) {
+            return 'in_house';
+        }
+
+        if ($this->isConfirmed()) {
+            return $this->hasBalancePaymentLoadedOrPersisted()
+                ? 'ready_for_check_in'
+                : 'awaiting_balance';
+        }
+
+        if ($this->isPendingExpired()) {
+            return 'expired_pending_confirmation';
+        }
+
+        return 'awaiting_deposit';
+    }
+
     /**
      * Calcula el número de noches
      */
@@ -257,5 +284,14 @@ class Reservation extends Model
     public function isBlocked(): bool
     {
         return $this->is_blocked === true;
+    }
+
+    private function hasBalancePaymentLoadedOrPersisted(): bool
+    {
+        if ($this->relationLoaded('payments')) {
+            return $this->payments->contains(fn (ReservationPayment $payment): bool => $payment->isBalance());
+        }
+
+        return $this->hasBalancePaid();
     }
 }

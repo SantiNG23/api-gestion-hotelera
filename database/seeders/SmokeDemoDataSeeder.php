@@ -42,7 +42,9 @@ class SmokeDemoDataSeeder extends Seeder
             );
 
             app(TenantContext::class)->run($tenant->id, function () use ($tenant, $tenantBlueprint): void {
-                $this->seedUser($tenant, $tenantBlueprint['user']);
+                foreach ($tenantBlueprint['users'] as $userBlueprint) {
+                    $this->seedUser($tenant, $userBlueprint);
+                }
 
                 $features = $this->seedFeatures($tenantBlueprint['features']);
                 $cabins = $this->seedCabins($tenantBlueprint['cabins'], $features);
@@ -59,7 +61,7 @@ class SmokeDemoDataSeeder extends Seeder
             $this->command?->line(sprintf(
                 '  - %s listo (%s / %s)',
                 $tenant->name,
-                $tenantBlueprint['user']['email'],
+                $tenantBlueprint['users'][0]['email'],
                 self::PASSWORD
             ));
         }
@@ -70,7 +72,10 @@ class SmokeDemoDataSeeder extends Seeder
     private function seedUser(Tenant $tenant, array $userBlueprint): void
     {
         User::query()->updateOrCreate(
-            ['email' => $userBlueprint['email']],
+            [
+                'tenant_id' => $tenant->id,
+                'email' => $userBlueprint['email'],
+            ],
             [
                 'name' => $userBlueprint['name'],
                 'password' => Hash::make(self::PASSWORD),
@@ -337,9 +342,15 @@ class SmokeDemoDataSeeder extends Seeder
             [
                 'slug' => 'smoke-sierra-clara',
                 'name' => 'Smoke Sierra Clara',
-                'user' => [
-                    'name' => 'Operador Smoke Sierra',
-                    'email' => 'smoke.sierra@miradordeluz.test',
+                'users' => [
+                    [
+                        'name' => 'Operador Smoke Sierra',
+                        'email' => 'smoke.sierra@miradordeluz.test',
+                    ],
+                    [
+                        'name' => 'Operador Compartido Sierra',
+                        'email' => 'smoke.shared@miradordeluz.test',
+                    ],
                 ],
                 'features' => [
                     ['key' => 'wifi', 'name' => 'SMOKE A | Wifi', 'icon' => 'wifi'],
@@ -633,9 +644,15 @@ class SmokeDemoDataSeeder extends Seeder
             [
                 'slug' => 'smoke-bosque-sereno',
                 'name' => 'Smoke Bosque Sereno',
-                'user' => [
-                    'name' => 'Operador Smoke Bosque',
-                    'email' => 'smoke.bosque@miradordeluz.test',
+                'users' => [
+                    [
+                        'name' => 'Operador Smoke Bosque',
+                        'email' => 'smoke.bosque@miradordeluz.test',
+                    ],
+                    [
+                        'name' => 'Operador Compartido Bosque',
+                        'email' => 'smoke.shared@miradordeluz.test',
+                    ],
                 ],
                 'features' => [
                     ['key' => 'wifi', 'name' => 'SMOKE B | Wifi', 'icon' => 'wifi'],

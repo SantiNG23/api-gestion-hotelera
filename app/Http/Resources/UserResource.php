@@ -17,6 +17,7 @@ class UserResource extends ApiResource
             'id' => $this->id,
             'name' => $this->name,
             'email' => $this->email,
+            'tenant' => $this->whenLoaded('tenant', fn () => (new TenantResource($this->tenant))->resolve()),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Events\UserRegistered;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Tenancy\TenantContext;
 use App\Tenancy\TenantContextResolver;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -51,30 +51,50 @@ class AuthService
         ]);
     }
 
-    /**
-     * Autentica a un usuario (login o registro)
-     */
-    public function authenticate(array $data): User
+    public function discover(string $email): array
     {
-        $tenantId = $this->resolveTrustedTenantId($data);
+        $tenants = Tenant::query()
+            ->select(['tenants.id', 'tenants.slug', 'tenants.name'])
+            ->join('users', 'users.tenant_id', '=', 'tenants.id')
+            ->where('users.email', $email)
+            ->where('tenants.is_active', true)
+            ->distinct()
+            ->orderBy('tenants.name')
+            ->get();
 
-        $user = $this->findUserByEmail(
-            $data['email'],
-            $tenantId
-        );
+        return [
+            'mode' => $this->resolveDiscoverMode($tenants),
+            'email' => $email,
+            'tenants' => $tenants,
+        ];
+    }
 
-        if (! $user) {
-            $user = $this->createUser($data);
-            UserRegistered::dispatch($user->id, (int) $user->tenant_id);
-        } elseif (! $this->validateCredentials($user, $data['password'])) {
-            throw ValidationException::withMessages([
-                'email' => ['Las credenciales proporcionadas son incorrectas.'],
-            ]);
+    public function login(array $credentials): array
+    {
+        $tenant = $this->resolveTenantForLogin($credentials['tenant_slug'] ?? null);
+
+        $user = $this->findUserByEmail($credentials['email'], $tenant->id);
+
+        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
+            $this->throwFunctionalError(
+                'invalid_credentials',
+                'email',
+                'Las credenciales proporcionadas son incorrectas.'
+            );
         }
 
-        $user->token = $this->createApiToken($user, 'auth-token');
+        $user->loadMissing('tenant');
 
-        return $user;
+        return [
+            'token' => $this->createApiToken($user, 'auth-token'),
+            'user' => $user,
+            'tenant' => $tenant,
+        ];
+    }
+
+    public function bootstrap(User $user): User
+    {
+        return $user->loadMissing('tenant');
     }
 
     /**
@@ -124,6 +144,42 @@ class AuthService
         $user = $users->first();
 
         return $user;
+    }
+
+    private function resolveTenantForLogin(mixed $tenantSlug): Tenant
+    {
+        if (! is_string($tenantSlug) || $tenantSlug === '') {
+            $this->throwFunctionalError('tenant_required', 'tenant_slug', 'Selecciona una cuenta para continuar.');
+        }
+
+        $tenant = Tenant::query()->where('slug', $tenantSlug)->first();
+
+        if (! $tenant) {
+            $this->throwFunctionalError('tenant_required', 'tenant_slug', 'Selecciona una cuenta para continuar.');
+        }
+
+        if (! $tenant->is_active) {
+            $this->throwFunctionalError('inactive_tenant', 'tenant_slug', 'La cuenta seleccionada no esta disponible.');
+        }
+
+        return $tenant;
+    }
+
+    private function resolveDiscoverMode(Collection $tenants): string
+    {
+        return match ($tenants->count()) {
+            0 => 'not_found',
+            1 => 'single_tenant',
+            default => 'multi_tenant',
+        };
+    }
+
+    private function throwFunctionalError(string $code, string $field, string $message): never
+    {
+        throw ValidationException::withMessages([
+            'code' => [$code],
+            $field => [$message],
+        ]);
     }
 
     /**

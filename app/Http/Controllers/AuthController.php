@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\AuthRequest;
+use App\Http\Requests\AuthDiscoverRequest;
+use App\Http\Requests\AuthLoginRequest;
+use App\Http\Resources\AuthDiscoverResource;
 use App\Http\Resources\AuthResource;
 use App\Http\Resources\UserResource;
 use App\Services\AuthService;
@@ -17,19 +19,19 @@ class AuthController extends Controller
         private readonly AuthService $authService
     ) {}
 
-    /**
-     * Autenticación de usuario (login o registro)
-     */
-    public function store(AuthRequest $request): JsonResponse
+    public function discover(AuthDiscoverRequest $request): JsonResponse
     {
-        $user = $this->authService->authenticate($request->validated());
-        $isNew = $user->wasRecentlyCreated;
+        $payload = $this->authService->discover($request->validated('email'));
 
         return $this->successResponse(
-            new AuthResource($user),
-            $isNew ? 'Usuario registrado exitosamente' : 'Usuario autenticado exitosamente',
-            $isNew ? 201 : 200
+            new AuthDiscoverResource($payload),
+            $this->discoverMessage($payload['mode'])
         );
+    }
+
+    public function login(AuthLoginRequest $request): JsonResponse
+    {
+        return $this->loginResponse($request->validated());
     }
 
     /**
@@ -42,14 +44,29 @@ class AuthController extends Controller
         return $this->successResponse(null, 'Sesión cerrada exitosamente');
     }
 
-    /**
-     * Obtener el usuario autenticado
-     */
     public function show(Request $request): JsonResponse
     {
         return $this->successResponse(
-            new UserResource($request->user()),
+            new UserResource($this->authService->bootstrap($request->user())),
             'Usuario obtenido exitosamente'
         );
+    }
+
+    private function loginResponse(array $credentials): JsonResponse
+    {
+        return $this->successResponse(
+            new AuthResource($this->authService->login($credentials)),
+            'Usuario autenticado exitosamente'
+        );
+    }
+
+    private function discoverMessage(string $mode): string
+    {
+        return match ($mode) {
+            'not_found' => 'No se encontraron accesos para ese correo.',
+            'single_tenant' => 'Acceso encontrado.',
+            'multi_tenant' => 'Selecciona un tenant para continuar.',
+            default => 'Operacion exitosa',
+        };
     }
 }
