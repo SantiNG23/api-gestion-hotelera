@@ -7,7 +7,6 @@ namespace Tests\Feature\Api;
 use App\Models\Cabin;
 use App\Models\Client;
 use App\Models\Reservation;
-use App\Models\ReservationPayment;
 use Carbon\Carbon;
 use Tests\TestCase;
 
@@ -52,30 +51,51 @@ class ReportsReservationsApiTest extends TestCase
                 'end_date' => '2026-04-30',
             ]));
 
-        $this->assertPaginatedResponse($response);
-        $response->assertJsonCount(1, 'data');
+        $this->assertApiResponse($response);
         $response->assertJsonStructure([
+            'success',
+            'message',
             'data' => [
-                '*' => [
-                    'id',
-                    'guest_name',
-                    'check_in',
-                    'check_out',
-                    'cabin_name',
-                    'status',
-                    'report_status',
-                    'amount',
+                'total',
+                'total_revenue',
+                'reservations' => [
+                    '*' => [
+                        'id',
+                        'status',
+                        'check_in_date',
+                        'check_out_date',
+                        'total_price',
+                        'nights',
+                        'cabin_id',
+                        'cabin' => ['id', 'name'],
+                        'client' => ['id', 'name', 'dni'],
+                    ],
                 ],
             ],
+            'meta' => [
+                'current_page',
+                'last_page',
+                'per_page',
+                'total',
+                'from',
+                'to',
+            ],
+            'links' => [
+                'first',
+                'last',
+                'prev',
+                'next',
+            ],
         ]);
-        $response->assertJsonPath('data.0.id', $reservation->id);
-        $response->assertJsonPath('data.0.guest_name', 'Ana Perez');
-        $response->assertJsonPath('data.0.cabin_name', 'Cabana Arrayan');
-        $response->assertJsonPath('data.0.report_status', 'awaiting_deposit');
-        $response->assertJsonPath('data.0.amount', 350.0);
+        $response->assertJsonPath('data.total', 1);
+        $response->assertJsonPath('data.total_revenue', 0.0);
+        $response->assertJsonPath('data.reservations.0.id', $reservation->id);
+        $response->assertJsonPath('data.reservations.0.client.name', 'Ana Perez');
+        $response->assertJsonPath('data.reservations.0.cabin.name', 'Cabana Arrayan');
+        $response->assertJsonPath('data.reservations.0.nights', 3);
     }
 
-    public function test_report_is_paginated(): void
+    public function test_report_uses_server_side_pagination(): void
     {
         $this->createReservation(['client_name' => 'Huesped 1', 'check_in_date' => '2026-04-01', 'check_out_date' => '2026-04-02']);
         $this->createReservation(['client_name' => 'Huesped 2', 'check_in_date' => '2026-04-03', 'check_out_date' => '2026-04-04']);
@@ -89,11 +109,11 @@ class ReportsReservationsApiTest extends TestCase
                 'page' => 2,
             ]));
 
-        $this->assertPaginatedResponse($response);
-        $response->assertJsonCount(1, 'data');
+        $this->assertApiResponse($response);
+        $response->assertJsonPath('data.total', 3);
         $response->assertJsonPath('meta.current_page', 2);
         $response->assertJsonPath('meta.per_page', 2);
-        $response->assertJsonPath('meta.total', 3);
+        $response->assertJsonCount(1, 'data.reservations');
     }
 
     public function test_can_filter_report_by_overlapping_date_range(): void
@@ -102,6 +122,7 @@ class ReportsReservationsApiTest extends TestCase
             'client_name' => 'Dentro de rango',
             'check_in_date' => '2026-04-11',
             'check_out_date' => '2026-04-14',
+            'status' => Reservation::STATUS_CONFIRMED,
         ]);
 
         $this->createReservation([
@@ -116,9 +137,10 @@ class ReportsReservationsApiTest extends TestCase
                 'end_date' => '2026-04-12',
             ]));
 
-        $this->assertPaginatedResponse($response);
-        $response->assertJsonCount(1, 'data');
-        $response->assertJsonPath('data.0.id', $inRange->id);
+        $this->assertApiResponse($response);
+        $response->assertJsonPath('data.total', 1);
+        $response->assertJsonPath('data.reservations.0.id', $inRange->id);
+        $response->assertJsonPath('data.reservations.0.nights', 1);
     }
 
     public function test_can_filter_report_by_cabin_id(): void
@@ -144,16 +166,17 @@ class ReportsReservationsApiTest extends TestCase
                 'cabin_id' => $this->cabinB->id,
             ]));
 
-        $this->assertPaginatedResponse($response);
-        $response->assertJsonCount(1, 'data');
-        $response->assertJsonPath('data.0.id', $expected->id);
-        $response->assertJsonPath('data.0.cabin_name', 'Cabana Maiten');
+        $this->assertApiResponse($response);
+        $response->assertJsonPath('data.total', 1);
+        $response->assertJsonPath('data.reservations.0.id', $expected->id);
+        $response->assertJsonPath('data.reservations.0.cabin.name', 'Cabana Maiten');
     }
 
     public function test_can_search_report_by_guest_or_cabin(): void
     {
         $expected = $this->createReservation([
             'client_name' => 'Lucia Gomez',
+            'dni' => '44556677',
             'cabin_id' => $this->cabinB->id,
             'check_in_date' => '2026-04-15',
             'check_out_date' => '2026-04-18',
@@ -161,6 +184,7 @@ class ReportsReservationsApiTest extends TestCase
 
         $this->createReservation([
             'client_name' => 'Pedro Diaz',
+            'dni' => '11223344',
             'cabin_id' => $this->cabinA->id,
             'check_in_date' => '2026-04-15',
             'check_out_date' => '2026-04-18',
@@ -170,13 +194,13 @@ class ReportsReservationsApiTest extends TestCase
             ->getJson('/api/v1/reports/reservations?'.http_build_query([
                 'start_date' => '2026-04-01',
                 'end_date' => '2026-04-30',
-                'search' => 'lucia',
+                'search' => '4455',
             ]));
 
-        $this->assertPaginatedResponse($response);
-        $response->assertJsonCount(1, 'data');
-        $response->assertJsonPath('data.0.id', $expected->id);
-        $response->assertJsonPath('data.0.guest_name', 'Lucia Gomez');
+        $this->assertApiResponse($response);
+        $response->assertJsonPath('data.total', 1);
+        $response->assertJsonPath('data.reservations.0.id', $expected->id);
+        $response->assertJsonPath('data.reservations.0.client.name', 'Lucia Gomez');
     }
 
     public function test_report_keeps_tenant_isolation(): void
@@ -210,99 +234,74 @@ class ReportsReservationsApiTest extends TestCase
                 'end_date' => '2026-04-30',
             ]));
 
-        $this->assertPaginatedResponse($response);
-        $response->assertJsonCount(0, 'data');
-        $response->assertJsonPath('meta.total', 0);
+        $this->assertApiResponse($response);
+        $response->assertJsonPath('data.total', 0);
+        $response->assertJsonCount(0, 'data.reservations');
     }
 
-    public function test_report_status_mapping_is_stable(): void
+    public function test_total_revenue_only_counts_operational_statuses(): void
     {
-        $awaitingDeposit = $this->createReservation([
-            'client_name' => 'Pendiente activa',
-            'check_in_date' => '2026-04-10',
-            'check_out_date' => '2026-04-12',
+        $this->createReservation([
+            'client_name' => 'Pendiente',
             'status' => Reservation::STATUS_PENDING_CONFIRMATION,
-            'pending_until' => now()->addDay(),
+            'total_price' => 100,
         ]);
 
-        $expiredPending = $this->createReservation([
-            'client_name' => 'Pendiente vencida',
-            'check_in_date' => '2026-04-11',
-            'check_out_date' => '2026-04-13',
-            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
-            'pending_until' => now()->subDay(),
-        ]);
-
-        $awaitingBalance = $this->createReservation([
-            'client_name' => 'Confirmada sin saldo',
-            'check_in_date' => '2026-04-12',
-            'check_out_date' => '2026-04-14',
+        $this->createReservation([
+            'client_name' => 'Confirmada',
             'status' => Reservation::STATUS_CONFIRMED,
-            'pending_until' => null,
+            'total_price' => 200,
         ]);
 
-        $readyForCheckIn = $this->createReservation([
-            'client_name' => 'Confirmada paga',
-            'check_in_date' => '2026-04-13',
-            'check_out_date' => '2026-04-15',
-            'status' => Reservation::STATUS_CONFIRMED,
-            'pending_until' => null,
-        ]);
-
-        ReservationPayment::factory()->deposit()->create([
-            'reservation_id' => $readyForCheckIn->id,
-            'amount' => $readyForCheckIn->deposit_amount,
-        ]);
-
-        ReservationPayment::factory()->balance()->create([
-            'reservation_id' => $readyForCheckIn->id,
-            'amount' => $readyForCheckIn->balance_amount,
-        ]);
-
-        $inHouse = $this->createReservation([
-            'client_name' => 'Con check-in',
-            'check_in_date' => '2026-04-14',
-            'check_out_date' => '2026-04-16',
+        $this->createReservation([
+            'client_name' => 'Check in',
             'status' => Reservation::STATUS_CHECKED_IN,
-            'pending_until' => null,
+            'total_price' => 300,
         ]);
 
-        $checkedOut = $this->createReservation([
+        $this->createReservation([
             'client_name' => 'Finalizada',
-            'check_in_date' => '2026-04-15',
-            'check_out_date' => '2026-04-17',
             'status' => Reservation::STATUS_FINISHED,
-            'pending_until' => null,
+            'total_price' => 400,
         ]);
 
-        $cancelled = $this->createReservation([
+        $this->createReservation([
             'client_name' => 'Cancelada',
-            'check_in_date' => '2026-04-16',
-            'check_out_date' => '2026-04-18',
             'status' => Reservation::STATUS_CANCELLED,
-            'pending_until' => null,
+            'total_price' => 500,
         ]);
 
         $response = $this->withHeaders($this->authHeaders())
             ->getJson('/api/v1/reports/reservations?'.http_build_query([
                 'start_date' => '2026-04-01',
                 'end_date' => '2026-04-30',
-                'per_page' => 20,
             ]));
 
-        $this->assertPaginatedResponse($response);
+        $this->assertApiResponse($response);
+        $response->assertJsonPath('data.total', 5);
+        $response->assertJsonPath('data.total_revenue', 900.0);
+    }
 
-        $statusesById = collect($response->json('data'))
-            ->mapWithKeys(fn (array $item): array => [$item['id'] => $item['report_status']])
-            ->all();
+    public function test_total_revenue_is_prorated_to_nights_inside_range(): void
+    {
+        $this->createReservation([
+            'client_name' => 'Reserva larga',
+            'status' => Reservation::STATUS_CONFIRMED,
+            'check_in_date' => '2026-04-10',
+            'check_out_date' => '2026-04-15',
+            'total_price' => 500,
+        ]);
 
-        $this->assertSame('awaiting_deposit', $statusesById[$awaitingDeposit->id]);
-        $this->assertSame('expired_pending_confirmation', $statusesById[$expiredPending->id]);
-        $this->assertSame('awaiting_balance', $statusesById[$awaitingBalance->id]);
-        $this->assertSame('ready_for_check_in', $statusesById[$readyForCheckIn->id]);
-        $this->assertSame('in_house', $statusesById[$inHouse->id]);
-        $this->assertSame('checked_out', $statusesById[$checkedOut->id]);
-        $this->assertSame('cancelled', $statusesById[$cancelled->id]);
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/reports/reservations?'.http_build_query([
+                'start_date' => '2026-04-12',
+                'end_date' => '2026-04-13',
+            ]));
+
+        $this->assertApiResponse($response);
+        $response->assertJsonPath('data.total', 1);
+        $response->assertJsonPath('data.reservations.0.nights', 2);
+        $response->assertJsonPath('data.total_revenue', 200.0);
     }
 
     private function createReservation(array $overrides = []): Reservation
