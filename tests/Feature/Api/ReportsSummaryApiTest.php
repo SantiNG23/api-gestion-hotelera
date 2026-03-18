@@ -7,7 +7,6 @@ namespace Tests\Feature\Api;
 use App\Models\Cabin;
 use App\Models\Client;
 use App\Models\Reservation;
-use App\Models\ReservationPayment;
 use Carbon\Carbon;
 use Tests\TestCase;
 
@@ -43,9 +42,10 @@ class ReportsSummaryApiTest extends TestCase
             'success',
             'message',
             'data' => [
-                'pending_deposits',
-                'scheduled_check_ins',
-                'estimated_occupancy',
+                'occupancy_rate',
+                'nights_sold',
+                'total_reservations',
+                'operational_revenue',
             ],
         ]);
     }
@@ -59,9 +59,10 @@ class ReportsSummaryApiTest extends TestCase
             ]));
 
         $this->assertApiResponse($response);
-        $response->assertJsonPath('data.pending_deposits', 0);
-        $response->assertJsonPath('data.scheduled_check_ins', 0);
-        $response->assertJsonPath('data.estimated_occupancy', 0.0);
+        $response->assertJsonPath('data.occupancy_rate', 0.0);
+        $response->assertJsonPath('data.nights_sold', 0);
+        $response->assertJsonPath('data.total_reservations', 0);
+        $response->assertJsonPath('data.operational_revenue', 0.0);
     }
 
     public function test_keeps_tenant_isolation(): void
@@ -70,21 +71,13 @@ class ReportsSummaryApiTest extends TestCase
         $otherClient = Client::factory()->create(['tenant_id' => $otherTenant->id]);
         $otherCabin = Cabin::factory()->create(['tenant_id' => $otherTenant->id]);
 
-        Reservation::factory()->create([
-            'tenant_id' => $otherTenant->id,
-            'client_id' => $otherClient->id,
-            'cabin_id' => $otherCabin->id,
-            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
-            'check_in_date' => Carbon::parse('2026-03-10'),
-            'check_out_date' => Carbon::parse('2026-03-12'),
-        ]);
-
         Reservation::factory()->confirmed()->create([
             'tenant_id' => $otherTenant->id,
             'client_id' => $otherClient->id,
             'cabin_id' => $otherCabin->id,
-            'check_in_date' => Carbon::parse('2026-03-11'),
-            'check_out_date' => Carbon::parse('2026-03-13'),
+            'check_in_date' => Carbon::parse('2026-03-10'),
+            'check_out_date' => Carbon::parse('2026-03-12'),
+            'total_price' => 900,
         ]);
 
         $response = $this->withHeaders($this->authHeaders())
@@ -94,9 +87,10 @@ class ReportsSummaryApiTest extends TestCase
             ]));
 
         $this->assertApiResponse($response);
-        $response->assertJsonPath('data.pending_deposits', 0);
-        $response->assertJsonPath('data.scheduled_check_ins', 0);
-        $response->assertJsonPath('data.estimated_occupancy', 0.0);
+        $response->assertJsonPath('data.occupancy_rate', 0.0);
+        $response->assertJsonPath('data.nights_sold', 0);
+        $response->assertJsonPath('data.total_reservations', 0);
+        $response->assertJsonPath('data.operational_revenue', 0.0);
     }
 
     public function test_calculates_report_kpis_for_range(): void
@@ -104,14 +98,15 @@ class ReportsSummaryApiTest extends TestCase
         $startDate = Carbon::today()->addDays(10);
         $endDate = $startDate->copy()->addDays(2);
 
-        $pendingReservation = Reservation::factory()->create([
+        Reservation::factory()->create([
             'tenant_id' => $this->tenant->id,
             'client_id' => $this->client->id,
             'cabin_id' => $this->cabinA->id,
             'status' => Reservation::STATUS_PENDING_CONFIRMATION,
             'check_in_date' => $startDate->copy(),
             'check_out_date' => $startDate->copy()->addDays(2),
-            'pending_until' => $startDate->copy()->subDay()->setTime(18, 0),
+            'pending_until' => now()->addDay(),
+            'total_price' => 300,
         ]);
 
         Reservation::factory()->confirmed()->create([
@@ -120,11 +115,7 @@ class ReportsSummaryApiTest extends TestCase
             'cabin_id' => $this->cabinB->id,
             'check_in_date' => $startDate->copy()->addDay(),
             'check_out_date' => $endDate->copy()->addDay(),
-        ]);
-
-        ReservationPayment::factory()->deposit()->create([
-            'reservation_id' => $pendingReservation->id,
-            'amount' => $pendingReservation->deposit_amount,
+            'total_price' => 500,
         ]);
 
         Reservation::factory()->create([
@@ -134,7 +125,8 @@ class ReportsSummaryApiTest extends TestCase
             'status' => Reservation::STATUS_PENDING_CONFIRMATION,
             'check_in_date' => $startDate->copy()->addDay(),
             'check_out_date' => $endDate->copy()->addDay(),
-            'pending_until' => Carbon::yesterday()->setTime(18, 0),
+            'pending_until' => now()->subDay(),
+            'total_price' => 400,
         ]);
 
         $response = $this->withHeaders($this->authHeaders())
@@ -144,9 +136,10 @@ class ReportsSummaryApiTest extends TestCase
             ]));
 
         $this->assertApiResponse($response);
-        $response->assertJsonPath('data.pending_deposits', 1);
-        $response->assertJsonPath('data.scheduled_check_ins', 1);
-        $response->assertJsonPath('data.estimated_occupancy', 66.67);
+        $response->assertJsonPath('data.occupancy_rate', 66.67);
+        $response->assertJsonPath('data.nights_sold', 2);
+        $response->assertJsonPath('data.total_reservations', 3);
+        $response->assertJsonPath('data.operational_revenue', 500.0);
     }
 
     public function test_can_filter_summary_by_cabin(): void
@@ -160,6 +153,7 @@ class ReportsSummaryApiTest extends TestCase
             'cabin_id' => $this->cabinA->id,
             'check_in_date' => $startDate->copy(),
             'check_out_date' => $startDate->copy()->addDays(2),
+            'total_price' => 450,
         ]);
 
         Reservation::factory()->create([
@@ -169,7 +163,8 @@ class ReportsSummaryApiTest extends TestCase
             'status' => Reservation::STATUS_PENDING_CONFIRMATION,
             'check_in_date' => $startDate->copy(),
             'check_out_date' => $startDate->copy()->addDays(2),
-            'pending_until' => Carbon::today()->addDays(5)->setTime(18, 0),
+            'pending_until' => now()->addDay(),
+            'total_price' => 320,
         ]);
 
         $response = $this->withHeaders($this->authHeaders())
@@ -180,8 +175,31 @@ class ReportsSummaryApiTest extends TestCase
             ]));
 
         $this->assertApiResponse($response);
-        $response->assertJsonPath('data.pending_deposits', 0);
-        $response->assertJsonPath('data.scheduled_check_ins', 1);
-        $response->assertJsonPath('data.estimated_occupancy', 66.67);
+        $response->assertJsonPath('data.occupancy_rate', 66.67);
+        $response->assertJsonPath('data.nights_sold', 2);
+        $response->assertJsonPath('data.total_reservations', 1);
+        $response->assertJsonPath('data.operational_revenue', 450.0);
+    }
+
+    public function test_operational_revenue_is_prorated_to_nights_inside_range(): void
+    {
+        Reservation::factory()->confirmed()->create([
+            'tenant_id' => $this->tenant->id,
+            'client_id' => $this->client->id,
+            'cabin_id' => $this->cabinA->id,
+            'check_in_date' => '2026-04-10',
+            'check_out_date' => '2026-04-15',
+            'total_price' => 500,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/reports/summary?'.http_build_query([
+                'start_date' => '2026-04-12',
+                'end_date' => '2026-04-13',
+            ]));
+
+        $this->assertApiResponse($response);
+        $response->assertJsonPath('data.nights_sold', 2);
+        $response->assertJsonPath('data.operational_revenue', 200.0);
     }
 }

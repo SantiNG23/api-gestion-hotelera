@@ -13,6 +13,8 @@ use App\Http\Controllers\FrontendLogController;
 use App\Http\Controllers\PriceGroupController;
 use App\Http\Controllers\PriceRangeController;
 use App\Http\Controllers\ReportsGuestController;
+use App\Http\Controllers\ReportsHistoryDniController;
+use App\Http\Controllers\ReportsOccupancyController;
 use App\Http\Controllers\ReportsReservationController;
 use App\Http\Controllers\ReportsSummaryController;
 use App\Http\Controllers\ReservationController;
@@ -87,6 +89,8 @@ Route::prefix('v1')->group(function () {
         // Resumen Diario
         Route::get('daily-summary', [DailySummaryController::class, 'index'])->name('daily-summary.index');
         Route::get('reports/guests', [ReportsGuestController::class, 'index'])->name('reports.guests.index');
+        Route::get('reports/history-dni', [ReportsHistoryDniController::class, 'index'])->name('reports.history-dni.index');
+        Route::get('reports/occupancy', [ReportsOccupancyController::class, 'index'])->name('reports.occupancy.index');
         Route::get('reports/reservations', [ReportsReservationController::class, 'index'])->name('reports.reservations.index');
         Route::get('reports/summary', [ReportsSummaryController::class, 'index'])->name('reports.summary.index');
 
