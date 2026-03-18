@@ -160,4 +160,24 @@ class ClientApiTest extends TestCase
         $this->assertPaginatedResponse($response);
         $response->assertJsonCount(1, 'data');
     }
+
+    public function test_can_filter_clients_by_numeric_dni_query_param(): void
+    {
+        $matchingClient = Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'dni' => '12345678',
+        ]);
+        Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'dni' => '87654321',
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/clients?dni=12345678');
+
+        $this->assertPaginatedResponse($response);
+        $response->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $matchingClient->id)
+            ->assertJsonPath('data.0.dni', '12345678');
+    }
 }
