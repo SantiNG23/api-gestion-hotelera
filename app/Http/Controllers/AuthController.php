@@ -34,14 +34,6 @@ class AuthController extends Controller
         return $this->loginResponse($request->validated());
     }
 
-    public function store(AuthLoginRequest $request): JsonResponse
-    {
-        $response = $this->loginResponse($request->validated());
-        $response->headers->set('X-Deprecated-Endpoint', '/api/v1/auth');
-
-        return $response;
-    }
-
     /**
      * Logout del usuario (revocar token)
      */

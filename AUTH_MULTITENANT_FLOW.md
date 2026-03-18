@@ -8,7 +8,7 @@ Fecha: 2026-03-18
 - `POST /api/v1/auth/discover` expuesto.
 - `POST /api/v1/auth/login` expuesto.
 - `GET /api/v1/auth` ajustado para devolver `tenant`.
-- `POST /api/v1/auth` queda como alias legacy de login con header `X-Deprecated-Endpoint: /api/v1/auth`.
+- `POST /api/v1/auth` removido del contrato publico.
 
 ## Objetivo
 
@@ -267,12 +267,11 @@ Estado actual luego de la implementacion backend:
 - `POST /api/v1/auth/discover` implementado
 - `POST /api/v1/auth/login` implementado
 - `GET /api/v1/auth` devuelve usuario autenticado con `tenant`
-- `POST /api/v1/auth` deprecado como alias legacy de login
+- `POST /api/v1/auth` removido del backend y de la documentacion publica
 
 Todavia no implica:
 
 - migracion del frontend al flujo `discover -> login`
-- deprecacion removiendo por completo `POST /api/v1/auth`
 - resolucion de tenant por dominio o subdominio
 
 ## Siguiente paso recomendado
@@ -281,4 +280,4 @@ Implementar en una sesion aparte:
 
 1. adaptacion del frontend al flujo `discover -> login`
 2. ajuste de tests contract/smoke de frontend para el nuevo auth
-3. deprecacion efectiva del uso de `POST /api/v1/auth`
+3. endurecer smoke/E2E frontend para fallar ante cualquier uso residual de `POST /api/v1/auth`

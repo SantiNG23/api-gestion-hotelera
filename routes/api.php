@@ -36,7 +36,6 @@ Route::prefix('v1')->group(function () {
     // Rutas de autenticación
     Route::post('/auth/discover', [AuthController::class, 'discover'])->name('auth.discover');
     Route::post('/auth/login', [AuthController::class, 'login'])->name('auth.login');
-    Route::post('/auth', [AuthController::class, 'store'])->name('auth.store');
     Route::get('/auth', [AuthController::class, 'show'])->middleware('auth:sanctum')->name('auth.show');
     Route::delete('/auth', [AuthController::class, 'destroy'])->middleware('auth:sanctum')->name('auth.destroy');
 

@@ -31,12 +31,13 @@ Sin cambios directos en este modulo en la ultima tanda de implementacion (trazab
 
 | Metodo | Ruta | Proteccion | Implementacion |
 | --- | --- | --- | --- |
-| `POST` | `/api/v1/auth` | Publica | `routes/api.php:39`, `app/Http/Controllers/AuthController.php:21` |
-| `GET` | `/api/v1/auth` | `auth:sanctum` | `routes/api.php:40`, `app/Http/Controllers/AuthController.php:46` |
-| `DELETE` | `/api/v1/auth` | `auth:sanctum` | `routes/api.php:41`, `app/Http/Controllers/AuthController.php:36` |
-| `GET` | `/api/v1/users/profile` | `auth:sanctum` | `routes/api.php:45`, `app/Http/Controllers/UserController.php:21` |
-| `PUT` | `/api/v1/users/profile` | `auth:sanctum` | `routes/api.php:46`, `app/Http/Controllers/UserController.php:32` |
-| `PUT` | `/api/v1/users/password` | `auth:sanctum` | `routes/api.php:47`, `app/Http/Controllers/UserController.php:45` |
+| `POST` | `/api/v1/auth/discover` | Publica | `routes/api.php:37`, `app/Http/Controllers/AuthController.php:22` |
+| `POST` | `/api/v1/auth/login` | Publica | `routes/api.php:38`, `app/Http/Controllers/AuthController.php:32` |
+| `GET` | `/api/v1/auth` | `auth:sanctum` | `routes/api.php:39`, `app/Http/Controllers/AuthController.php:40` |
+| `DELETE` | `/api/v1/auth` | `auth:sanctum` | `routes/api.php:40`, `app/Http/Controllers/AuthController.php:33` |
+| `GET` | `/api/v1/users/profile` | `auth:sanctum` | `routes/api.php:44`, `app/Http/Controllers/UserController.php:21` |
+| `PUT` | `/api/v1/users/profile` | `auth:sanctum` | `routes/api.php:45`, `app/Http/Controllers/UserController.php:32` |
+| `PUT` | `/api/v1/users/password` | `auth:sanctum` | `routes/api.php:46`, `app/Http/Controllers/UserController.php:45` |
 
 ### Controllers
 
@@ -90,16 +91,14 @@ Sin cambios directos en este modulo en la ultima tanda de implementacion (trazab
 
 ## Funcionalidad actual
 
-- `POST /api/v1/auth` funciona como endpoint dual:
-  - si el email no existe, registra usuario
-  - si el email existe, intenta autenticarlo
-- El registro/autenticacion devuelve token Sanctum en la respuesta.
+- `POST /api/v1/auth/discover` resuelve accesos posibles para un email sin autenticar.
+- `POST /api/v1/auth/login` autentica con `email + password + tenant_slug` y devuelve token Sanctum.
 - `GET /api/v1/auth` devuelve el usuario autenticado.
 - `DELETE /api/v1/auth` elimina todos los tokens del usuario autenticado.
 - `GET /api/v1/users/profile` devuelve el perfil del usuario actual.
 - `PUT /api/v1/users/profile` actualiza nombre y/o email del usuario actual.
 - `PUT /api/v1/users/password` cambia la password del usuario autenticado validando password actual.
-- `POST /api/v1/auth` serializa usuario con `AuthResource` y expone `token` solo en login/registro.
+- `POST /api/v1/auth/login` serializa usuario con `AuthResource` y expone `token` solo en login.
 - `GET /api/v1/auth` y `GET/PUT /api/v1/users/profile` serializan usuario con `UserResource` sin exponer `token`.
 - Las respuestas exitosas usan formato general `{ success, message, data }`.
 - Los errores de validacion usan formato `{ success, message, errors }`.
@@ -111,15 +110,12 @@ Sin cambios directos en este modulo en la ultima tanda de implementacion (trazab
 
 ## Reglas de negocio
 
-- Auth decide entre login y registro segun exista el email en base de datos.
-- Para registro:
-  - `name` es obligatorio
-  - `name` debe tener minimo 3 caracteres
-  - `name` solo admite letras y espacios
-  - `email` es obligatorio, valido y maximo 255
-  - `password` es obligatoria, minima 8, confirmada y con complejidad obligatoria
+- Para discover:
+  - se valida `email`
+  - la respuesta puede devolver `not_found`, `single_tenant` o `multi_tenant`
 - Para login:
-  - se valida `email` y `password`
+  - se valida `email`, `password` y `tenant_slug`
+  - `tenant_id` esta prohibido en el payload
   - si las credenciales no coinciden, se responde `422` con error en `email`
 - Para perfil:
   - `name` es obligatorio en actualizacion de perfil
@@ -130,12 +126,10 @@ Sin cambios directos en este modulo en la ultima tanda de implementacion (trazab
   - la nueva password debe cumplir la misma complejidad
   - la nueva password debe venir confirmada
 - Logout revoca todos los tokens del usuario, no solo el token usado en la request.
-- Registro dispara el evento `UserRegistered`.
 - Los listeners registrados para `UserRegistered` hoy no generan efectos funcionales reales:
   - `SendWelcomeEmail` no envia correo; solo hace `Mail::fake()`
   - `CreateInitialUserSettings` no implementa ninguna accion
 - El modulo no implementa recuperacion de password ni reseteo via email.
-- El modulo no implementa verificacion de email en el flujo de registro actual.
 - El middleware `ValidateApiHeaders` exige:
   - un media type JSON valido en `Accept` (`application/json` o variantes `+json`, incluso con parametros)
   - para `POST`, `PUT`, `PATCH`, tambien un media type JSON valido en `Content-Type`
@@ -212,27 +206,7 @@ El cableado en `EventServiceProvider` esta correcto (`app/Providers/EventService
 
 ---
 
-### 2. El endpoint dual `POST /auth` sigue mezclando login y registro en un mismo contrato
-
-Ubicacion: `app/Http/Requests/AuthRequest.php:14-37` y `app/Services/AuthService.php:38-57`
-
-La decision de aplicar reglas de login o de registro sigue dependiendo del estado de la BD y del `tenant_id` provisto. Aunque la implementacion multi-tenant mejoro mucho respecto de versiones anteriores, el endpoint sigue combinando dos intenciones distintas en una sola ruta.
-
-```php
-// AuthRequest.php
-if (! $existingUserQuery->exists()) {
-    $rules = array_merge($rules, [
-        'name' => 'required|string|min:3|max:255|regex:/^[\p{L}\s]+$/u',
-        'password' => 'required|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&.])[A-Za-z\d@$!%*?&.]+$/|confirmed',
-    ]);
-}
-```
-
-Esto no es un bug critico por si solo, pero si una deuda de diseño: complica la semantica del contrato, obliga a mirar la BD para decidir la intencion del request y vuelve mas confusa la evolucion futura del flujo de onboarding.
-
----
-
-### 3. Credenciales invalidas siguen respondiendo `422` en vez de `401`
+### 2. Credenciales invalidas siguen respondiendo `422` en vez de `401`
 
 Ubicacion: `app/Services/AuthService.php:49-53` (`authenticate`)
 
@@ -249,7 +223,7 @@ Esto hoy parece una decision de UX/API mas que una falla funcional urgente, pero
 
 ---
 
-### 4. No hay flujo real de recuperacion o reset de password
+### 3. No hay flujo real de recuperacion o reset de password
 
 Ubicacion: ausencia de rutas/controladores/servicios especificos en `routes/api.php` y modulo de auth.
 
@@ -259,7 +233,7 @@ Esto no rompe la operacion basica, pero si limita madurez del modulo de acceso.
 
 ---
 
-### 5. Los tests de listeners siguen verificando wiring, no efectos reales
+### 4. Los tests de listeners siguen verificando wiring, no efectos reales
 
 Ubicacion: `tests/Feature/Events/UserRegisteredTest.php:64-94`
 
@@ -289,10 +263,8 @@ public function it_handles_welcome_email_sending()
 
 - **Riesgo 1** — Implementar o eliminar los listeners `SendWelcomeEmail` y `CreateInitialUserSettings`. Si permanecen, remover `Mail::fake()` del codigo productivo y reescribir los tests para verificar efectos reales.
 
-- **Riesgo 2** — Si se desea un contrato mas claro, separar login y registro en endpoints distintos (`POST /api/v1/auth/login` y `POST /api/v1/auth/register`). Si se mantiene el endpoint dual, documentar explicitamente la semantica y sus implicancias multi-tenant.
+- **Riesgo 2** — Evaluar si conviene responder `401` en credenciales invalidas usando `AuthenticationException`, o al menos documentar que el API hoy trata ese caso como error de validacion de formulario (`422`).
 
-- **Riesgo 3** — Evaluar si conviene responder `401` en credenciales invalidas usando `AuthenticationException`, o al menos documentar que el API hoy trata ese caso como error de validacion de formulario (`422`).
+- **Riesgo 3** — Implementar un flujo real de recovery/reset password si el sistema va a operar fuera de un contexto estrictamente administrado.
 
-- **Riesgo 4** — Implementar un flujo real de recovery/reset password si el sistema va a operar fuera de un contexto estrictamente administrado.
-
-- **Riesgo 5** — Reescribir los tests de listeners para que verifiquen side effects reales (`Mail::assertSent()`, `Queue::assertPushed()` o equivalente) en vez de solo comprobar que el usuario sigue existiendo en BD.
+- **Riesgo 4** — Reescribir los tests de listeners para que verifiquen side effects reales (`Mail::assertSent()`, `Queue::assertPushed()` o equivalente) en vez de solo comprobar que el usuario sigue existiendo en BD.

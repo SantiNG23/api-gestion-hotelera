@@ -18,7 +18,6 @@ Fecha: 2026-03-12
 - Tenant A: `smoke-sierra-clara` -> usuario `smoke.sierra@miradordeluz.test`
 - Tenant B: `smoke-bosque-sereno` -> usuario `smoke.bosque@miradordeluz.test`
 - En modo multi-tenant, el flujo canonico es `POST /api/v1/auth/discover` -> `POST /api/v1/auth/login`.
-- `POST /api/v1/auth` queda solo como alias legacy de login y devuelve `X-Deprecated-Endpoint: /api/v1/auth`.
 - `tenant_id` sigue prohibido en el flujo publico de autenticacion.
 - DNI compartido para smoke de lookup e isolation: `41000001`
 - Fecha ancla para smoke de calendar y daily summary: `2030-04-10`
@@ -39,7 +38,7 @@ Fecha: 2026-03-12
 - Pasos frontend:
   1. Enviar request JSON real desde el cliente.
   2. Reintentar con headers validos e invalidos.
-- Backend/API: `POST /api/v1/auth` y cualquier `POST/PUT/PATCH` protegido.
+- Backend/API: `POST /api/v1/auth/discover`, `POST /api/v1/auth/login` y cualquier `POST/PUT/PATCH` protegido.
 - Validaciones criticas:
   - aceptar `application/json` y `application/json; charset=utf-8`
   - rechazar media types no JSON
@@ -204,12 +203,6 @@ Estos contratos faltaban de forma explicita para poder testear funciones fronten
     - `tenant_slug` es obligatorio siempre.
     - `tenant_id` esta prohibido en payload.
     - errores funcionales relevantes: `invalid_credentials`, `tenant_required`, `inactive_tenant`.
-
-- `POST /api/v1/auth`
-  - Alias legacy de login.
-  - Mantiene el mismo payload que `POST /api/v1/auth/login`.
-  - Devuelve header `X-Deprecated-Endpoint: /api/v1/auth`.
-  - Ya NO registra usuarios.
 
 - `GET /api/v1/auth`
   - Output: usuario autenticado con `tenant` embebido.
@@ -757,26 +750,26 @@ Estos contratos faltaban de forma explicita para poder testear funciones fronten
 
 ## Acceso y perfil
 
-### A1. Registro o login por `POST /auth`
+### A1. Descubrimiento de acceso y login multi-tenant
 
 - Prioridad: `smoke`
-- Objetivo: permitir alta o ingreso desde una sola UX.
+- Objetivo: resolver tenant y autenticar con contrato explicito.
 - Precondiciones:
-  - email inexistente para registro
-  - email existente para login
+  - email inexistente para caso `not_found`
+  - email existente en uno o mas tenants activos
 - Pasos frontend:
-  1. Completar email y password.
-  2. Si es registro, completar name y password confirmation.
-  3. Enviar form.
-- Backend/API: `POST /api/v1/auth`.
+  1. Enviar email a `discover`.
+  2. Resolver `mode` y seleccionar tenant si hace falta.
+  3. Enviar password con `tenant_slug` a `login`.
+- Backend/API: `POST /api/v1/auth/discover`, `POST /api/v1/auth/login`.
 - Validaciones criticas:
-  - distinguir `201` registro vs `200` login
+  - distinguir `not_found`, `single_tenant` y `multi_tenant`
   - devolver token valido
   - rechazar `tenant_id` arbitrario
 - Edge cases:
   - password invalida
-  - password confirmation distinta
-  - multiples tenants sin contexto confiable
+  - tenant inactivo
+  - multiples tenants para el mismo email
 
 ### A2. Bootstrap de sesion actual
 
@@ -831,7 +824,7 @@ Estos contratos faltaban de forma explicita para poder testear funciones fronten
   1. Abrir pantalla de password.
   2. Enviar actual, nueva y confirmacion.
   3. Reingresar con la nueva password.
-- Backend/API: `PUT /api/v1/users/password`, `POST /api/v1/auth`.
+- Backend/API: `PUT /api/v1/users/password`, `POST /api/v1/auth/login`.
 - Validaciones criticas:
   - invalidar tokens previos
   - permitir login con nueva password

@@ -283,32 +283,6 @@ class AuthTest extends TestCase
     }
 
     #[Test]
-    public function it_keeps_post_auth_as_a_deprecated_login_alias(): void
-    {
-        $tenant = Tenant::factory()->create([
-            'slug' => 'mirador-centro',
-        ]);
-
-        User::factory()->create([
-            'tenant_id' => $tenant->id,
-            'email' => 'operador@empresa.com',
-            'password' => Hash::make('Secret123!'),
-        ]);
-
-        $response = $this->postJson('/api/v1/auth', [
-            'email' => 'operador@empresa.com',
-            'password' => 'Secret123!',
-            'tenant_slug' => 'mirador-centro',
-        ]);
-
-        $response->assertOk()
-            ->assertHeader('X-Deprecated-Endpoint', '/api/v1/auth')
-            ->assertJsonStructure([
-                'data' => ['token', 'user', 'tenant'],
-            ]);
-    }
-
-    #[Test]
     public function it_can_logout(): void
     {
         $user = User::factory()->create();
