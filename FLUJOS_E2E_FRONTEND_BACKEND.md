@@ -17,7 +17,9 @@ Fecha: 2026-03-12
 - Password comun demo: `Demo123!`
 - Tenant A: `smoke-sierra-clara` -> usuario `smoke.sierra@miradordeluz.test`
 - Tenant B: `smoke-bosque-sereno` -> usuario `smoke.bosque@miradordeluz.test`
-- En modo multi-tenant, `POST /api/v1/auth` necesita `tenant_slug` confiable; `tenant_id` sigue prohibido.
+- En modo multi-tenant, el flujo canonico es `POST /api/v1/auth/discover` -> `POST /api/v1/auth/login`.
+- `POST /api/v1/auth` queda solo como alias legacy de login y devuelve `X-Deprecated-Endpoint: /api/v1/auth`.
+- `tenant_id` sigue prohibido en el flujo publico de autenticacion.
 - DNI compartido para smoke de lookup e isolation: `41000001`
 - Fecha ancla para smoke de calendar y daily summary: `2030-04-10`
 - Cabanas base tenant A: `SMOKE A | Alerce Familiar`, `SMOKE A | Cipres Pareja`, `SMOKE A | Coihue Grupo`
@@ -75,6 +77,683 @@ Fecha: 2026-03-12
   - IDs exactos
   - payloads anidados
   - filtros y busquedas
+
+## Contratos minimos input/output para tests secuenciales de funciones
+
+Estos contratos faltaban de forma explicita para poder testear funciones frontend que solo hacen requests en cadena, sin depender de UI.
+
+### Envelope comun
+
+- Response exitosa simple:
+
+```json
+{
+  "success": true,
+  "message": "Operacion exitosa",
+  "data": {}
+}
+```
+
+- Response de validacion/error de negocio:
+
+```json
+{
+  "success": false,
+  "message": "Error de validacion",
+  "errors": {
+    "field": ["mensaje"]
+  }
+}
+```
+
+- Response paginada (`index`):
+
+```json
+{
+  "success": true,
+  "message": "Operacion exitosa",
+  "data": [],
+  "meta": {
+    "current_page": 1,
+    "last_page": 1,
+    "per_page": 15,
+    "total": 0,
+    "from": null,
+    "to": null
+  },
+  "links": {
+    "first": "...",
+    "last": "...",
+    "prev": null,
+    "next": null
+  }
+}
+```
+
+- Headers base para requests mutantes: `Accept: application/json`, `Content-Type: application/json`, `Authorization: Bearer <token>` cuando el endpoint sea protegido.
+
+### Auth y perfil
+
+- `POST /api/v1/auth/discover`
+  - Input:
+
+```json
+{
+  "email": "smoke.sierra@miradordeluz.test"
+}
+```
+
+  - Output `200`:
+
+```json
+{
+  "success": true,
+  "message": "Acceso encontrado.",
+  "data": {
+    "mode": "single_tenant",
+    "email": "smoke.sierra@miradordeluz.test",
+    "tenants": [
+      {
+        "slug": "smoke-sierra-clara",
+        "name": "Smoke Sierra Clara"
+      }
+    ]
+  }
+}
+```
+
+  - Modos posibles:
+    - `not_found`
+    - `single_tenant`
+    - `multi_tenant`
+
+- `POST /api/v1/auth/login`
+  - Input canonico:
+
+```json
+{
+  "email": "smoke.sierra@miradordeluz.test",
+  "password": "Demo123!",
+  "tenant_slug": "smoke-sierra-clara"
+}
+```
+
+  - Output `200`:
+
+```json
+{
+  "success": true,
+  "message": "Usuario autenticado exitosamente",
+  "data": {
+    "token": "1|plain-text-token",
+    "user": {
+      "id": 1,
+      "name": "Smoke Sierra Clara",
+      "email": "smoke.sierra@miradordeluz.test"
+    },
+    "tenant": {
+      "id": 1,
+      "slug": "smoke-sierra-clara",
+      "name": "Smoke Sierra Clara"
+    }
+  }
+}
+```
+
+  - Notas de contrato:
+    - `tenant_slug` es obligatorio siempre.
+    - `tenant_id` esta prohibido en payload.
+    - errores funcionales relevantes: `invalid_credentials`, `tenant_required`, `inactive_tenant`.
+
+- `POST /api/v1/auth`
+  - Alias legacy de login.
+  - Mantiene el mismo payload que `POST /api/v1/auth/login`.
+  - Devuelve header `X-Deprecated-Endpoint: /api/v1/auth`.
+  - Ya NO registra usuarios.
+
+- `GET /api/v1/auth`
+  - Output: usuario autenticado con `tenant` embebido.
+
+```json
+{
+  "success": true,
+  "message": "Usuario obtenido exitosamente",
+  "data": {
+    "id": 1,
+    "name": "Smoke Sierra Clara",
+    "email": "smoke.sierra@miradordeluz.test",
+    "tenant": {
+      "id": 1,
+      "slug": "smoke-sierra-clara",
+      "name": "Smoke Sierra Clara"
+    },
+    "created_at": "2026-03-12T00:00:00.000000Z",
+    "updated_at": "2026-03-12T00:00:00.000000Z"
+  }
+}
+```
+
+- `GET /api/v1/users/profile`
+  - Output: mismo payload que `GET /api/v1/auth`, incluyendo `tenant`.
+
+- `DELETE /api/v1/auth`
+  - Input: sin body.
+  - Output:
+
+```json
+{
+  "success": true,
+  "message": "Sesion cerrada exitosamente",
+  "data": null
+}
+```
+
+- `PUT /api/v1/users/profile`
+  - Input:
+
+```json
+{
+  "name": "Nombre Actualizado",
+  "email": "updated@example.com"
+}
+```
+
+  - Output: `data` con `id`, `name`, `email`, `created_at`, `updated_at`.
+
+- `PUT /api/v1/users/password`
+  - Input:
+
+```json
+{
+  "current_password": "Demo123!",
+  "password": "Nueva123!",
+  "password_confirmation": "Nueva123!"
+}
+```
+
+  - Output:
+
+```json
+{
+  "success": true,
+  "message": "Contrasena actualizada exitosamente",
+  "data": null
+}
+```
+
+  - Efecto observable obligatorio: invalida tokens previos; el token viejo debe devolver `401`.
+
+### Clientes
+
+- `GET /api/v1/clients`
+  - Query params soportados para tests de funciones: `page`, `per_page`, `name`, `dni`, `city`, `global`.
+  - Output item `ClientResource`:
+
+```json
+{
+  "id": 1,
+  "name": "Juan Perez",
+  "dni": "12345678",
+  "age": 35,
+  "city": "Buenos Aires",
+  "phone": "1155667788",
+  "email": "juan@test.com",
+  "reservations_count": 3
+}
+```
+
+- `POST /api/v1/clients` y `PUT/PATCH /api/v1/clients/{id}`
+  - Input:
+
+```json
+{
+  "name": "Juan Perez",
+  "dni": "12345678",
+  "age": 35,
+  "city": "Buenos Aires",
+  "phone": "1155667788",
+  "email": "juan@test.com"
+}
+```
+
+  - Output: `data` con el `ClientResource` de arriba.
+
+- `GET /api/v1/clients/dni/{dni}`
+  - Ruta canonica exacta: `clients/dni/{dni}`. NO `clients/search/dni/{dni}`.
+  - Output: `ClientResource` con `reservations` cargadas cuando corresponda.
+
+### Tarifas y precios
+
+- `POST /api/v1/price-groups/complete`
+  - Input minimo:
+
+```json
+{
+  "name": "Temporada Completa",
+  "priority": 30,
+  "is_default": false,
+  "cabins": [
+    {
+      "cabin_id": 1,
+      "prices": [
+        { "num_guests": 2, "price_per_night": 100.0 },
+        { "num_guests": 3, "price_per_night": 150.0 }
+      ]
+    }
+  ],
+  "date_ranges": [
+    {
+      "start_date": "2030-04-01",
+      "end_date": "2030-04-30"
+    }
+  ]
+}
+```
+
+  - Output inmediato: `data` con `id`, `name`, `price_per_night`, `priority`, `is_default`.
+
+- `GET /api/v1/price-groups/{id}/complete`
+  - Output minimo esperado:
+
+```json
+{
+  "success": true,
+  "message": "Operacion exitosa",
+  "data": {
+    "id": 1,
+    "name": "Temporada Completa",
+    "price_per_night": 100.0,
+    "priority": 30,
+    "is_default": false,
+    "cabins_count": 1,
+    "prices_count": 2,
+    "cabins": [
+      {
+        "id": 1,
+        "name": "SMOKE A | Alerce Familiar",
+        "description": null,
+        "capacity": 4,
+        "is_active": true,
+        "prices_in_group": [
+          { "id": 10, "num_guests": 2, "price_per_night": 100.0 }
+        ]
+      }
+    ],
+    "price_ranges": []
+  }
+}
+```
+
+- `GET /api/v1/price-ranges/applicable-rates?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD`
+  - Output real:
+
+```json
+{
+  "success": true,
+  "message": "Operacion exitosa",
+  "data": {
+    "start_date": "2030-04-09",
+    "end_date": "2030-04-10",
+    "rates": {
+      "2030-04-09": {
+        "price": 100.0,
+        "group_name": "Tarifa Base"
+      },
+      "2030-04-10": {
+        "price": 100.0,
+        "group_name": "Tarifa Base"
+      }
+    }
+  }
+}
+```
+
+  - Fallback sin tarifa: `group_name = "Sin tarifa configurada"` y `price = 0.0`.
+
+- `POST /api/v1/cabin-prices-by-guests` y `PUT /api/v1/cabin-prices-by-guests/{id}`
+  - Input:
+
+```json
+{
+  "cabin_id": 1,
+  "price_group_id": 2,
+  "num_guests": 2,
+  "price_per_night": 100.0
+}
+```
+
+  - Output: `data` con `id`, `cabin_id`, `price_group_id`, `num_guests`, `price_per_night`, `created_at`, `updated_at`.
+
+- `POST /api/v1/reservations/calculate-price`
+  - Input:
+
+```json
+{
+  "cabin_id": 1,
+  "check_in_date": "2030-04-20",
+  "check_out_date": "2030-04-23",
+  "num_guests": 2
+}
+```
+
+  - Output:
+
+```json
+{
+  "success": true,
+  "message": "Operacion exitosa",
+  "data": {
+    "cabin_id": 1,
+    "cabin_name": "SMOKE A | Alerce Familiar",
+    "check_in_date": "2030-04-20",
+    "check_out_date": "2030-04-23",
+    "num_guests": 2,
+    "nights": 3,
+    "total_price": 300.0,
+    "deposit_amount": 150.0,
+    "balance_amount": 150.0,
+    "pricing_breakdown": [
+      {
+        "date": "2030-04-20",
+        "price": 100.0,
+        "price_group": "Tarifa Base"
+      }
+    ]
+  }
+}
+```
+
+- `POST /api/v1/reservations/quote`
+  - Input: mismo contrato que `calculate-price`.
+  - Output: NO reutiliza las mismas keys exactas; devuelve:
+
+```json
+{
+  "success": true,
+  "message": "Operacion exitosa",
+  "data": {
+    "cabin_id": 1,
+    "check_in": "2030-04-20",
+    "check_out": "2030-04-23",
+    "total": 300.0,
+    "deposit": 150.0,
+    "balance": 150.0,
+    "nights": 3,
+    "breakdown": [],
+    "is_available": true
+  }
+}
+```
+
+### Reservas
+
+- `POST /api/v1/reservations`
+  - Input reserva normal:
+
+```json
+{
+  "cabin_id": 1,
+  "check_in_date": "2030-04-20",
+  "check_out_date": "2030-04-23",
+  "num_guests": 3,
+  "pending_hours": 24,
+  "notes": "Observacion interna",
+  "client": {
+    "name": "Jane Doe",
+    "dni": "87654321",
+    "email": "jane@example.com"
+  },
+  "guests": [
+    {
+      "name": "Guest 1",
+      "dni": "G1",
+      "age": 25
+    }
+  ]
+}
+```
+
+  - Input bloqueo manual:
+
+```json
+{
+  "cabin_id": 1,
+  "check_in_date": "2030-04-15",
+  "check_out_date": "2030-04-18",
+  "num_guests": 2,
+  "is_blocked": true
+}
+```
+
+  - Output `ReservationResource` minimo:
+
+```json
+{
+  "id": 1,
+  "client_id": 1,
+  "cabin_id": 1,
+  "num_guests": 2,
+  "check_in_date": "2030-04-20",
+  "check_out_date": "2030-04-23",
+  "nights": 3,
+  "total_price": 300.0,
+  "deposit_amount": 150.0,
+  "balance_amount": 150.0,
+  "status": "pending_confirmation",
+  "is_blocked": false,
+  "pending_until": "2030-04-19 12:00:00",
+  "notes": null,
+  "client": {},
+  "cabin": {},
+  "guests": [],
+  "payments": [],
+  "has_deposit_paid": false,
+  "has_balance_paid": false
+}
+```
+
+- `PUT/PATCH /api/v1/reservations/{id}`
+  - Input parcial permitido. Para tests secuenciales alcanza cubrir:
+    - solo `notes`
+    - cambio de `check_in_date`/`check_out_date`
+    - cambio de `cabin_id`
+    - toggle de `is_blocked`
+    - reemplazo completo de `guests`
+  - Output: mismo `ReservationResource`.
+
+- `POST /api/v1/reservations/{id}/confirm`
+- `POST /api/v1/reservations/{id}/pay-balance`
+- `POST /api/v1/reservations/{id}/check-in`
+  - Input opcional comun:
+
+```json
+{
+  "payment_method": "cash",
+  "paid_at": "2030-04-10 12:00:00"
+}
+```
+
+  - Output: mismo `ReservationResource` actualizado.
+
+- `POST /api/v1/reservations/{id}/check-out`
+- `POST /api/v1/reservations/{id}/cancel`
+  - Input: sin body.
+  - Output: mismo `ReservationResource` actualizado.
+
+- `DELETE /api/v1/reservations/{id}`
+  - Input: sin body.
+  - Output:
+
+```json
+{
+  "success": true,
+  "message": "Reserva eliminada exitosamente",
+  "data": null
+}
+```
+
+### Disponibilidad y operacion
+
+- `GET /api/v1/availability?cabin_id=1&check_in_date=YYYY-MM-DD&check_out_date=YYYY-MM-DD`
+  - Output puntual:
+
+```json
+{
+  "success": true,
+  "message": "Operacion exitosa",
+  "data": {
+    "cabin_id": 1,
+    "check_in_date": "2030-04-20",
+    "check_out_date": "2030-04-23",
+    "is_available": true
+  }
+}
+```
+
+- `GET /api/v1/availability?check_in_date=YYYY-MM-DD&check_out_date=YYYY-MM-DD`
+  - Output listado:
+
+```json
+{
+  "success": true,
+  "message": "Operacion exitosa",
+  "data": {
+    "check_in_date": "2030-04-20",
+    "check_out_date": "2030-04-23",
+    "available_count": 2,
+    "available_cabins": [
+      {
+        "id": 1,
+        "name": "SMOKE A | Alerce Familiar",
+        "description": null,
+        "capacity": 4,
+        "is_active": true,
+        "features": []
+      }
+    ]
+  }
+}
+```
+
+- `GET /api/v1/availability/{cabin_id}?from=YYYY-MM-DD&to=YYYY-MM-DD`
+  - Output:
+
+```json
+{
+  "success": true,
+  "message": "Operacion exitosa",
+  "data": {
+    "cabin_id": 1,
+    "from": "2030-04-01",
+    "to": "2030-04-30",
+    "blocked_ranges": [
+      {
+        "from": "2030-04-15",
+        "to": "2030-04-18",
+        "status": "confirmed"
+      }
+    ]
+  }
+}
+```
+
+- `GET /api/v1/availability/calendar?from=YYYY-MM-DD&to=YYYY-MM-DD`
+  - Output:
+
+```json
+{
+  "success": true,
+  "message": "Operacion exitosa",
+  "data": {
+    "from": "2030-04-09",
+    "to": "2030-04-18",
+    "cabins": [
+      {
+        "id": 1,
+        "name": "SMOKE A | Alerce Familiar",
+        "reservations": [
+          {
+            "id": 100,
+            "client_name": "SMOKE Historial A",
+            "check_in_date": "2030-04-10",
+            "check_out_date": "2030-04-12",
+            "status": "confirmed"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+- `GET /api/v1/daily-summary?date=YYYY-MM-DD`
+  - `date` es opcional.
+  - Output:
+
+```json
+{
+  "success": true,
+  "message": "Operacion exitosa",
+  "data": {
+    "has_events": true,
+    "check_ins": [
+      {
+        "id": 1,
+        "client_name": "Jane Doe",
+        "cabin_name": "SMOKE A | Alerce Familiar",
+        "check_in_date": "2030-04-10",
+        "check_out_date": "2030-04-13",
+        "nights": 3,
+        "total_price": 300.0,
+        "status": "confirmed",
+        "pending_until": null
+      }
+    ],
+    "check_outs": [],
+    "expiring_pending": []
+  }
+}
+```
+
+### Observabilidad frontend
+
+- `POST /api/v1/observability/frontend-logs`
+  - Input minimo:
+
+```json
+{
+  "timestamp": "2026-03-06T20:45:12.431Z",
+  "level": "warn",
+  "scope": "app",
+  "context": ["api", "response-interceptor"],
+  "event_name": "api.response.429",
+  "meta": {
+    "status": 429,
+    "url": "/reservations",
+    "method": "get"
+  },
+  "args": ["Demasiadas solicitudes"]
+}
+```
+
+  - Output `201`:
+
+```json
+{
+  "success": true,
+  "message": "Operacion exitosa",
+  "data": {
+    "id": "uuid",
+    "ingested_at": "2026-03-06T20:45:12.999999Z"
+  }
+}
+```
+
+  - Restricciones relevantes para tests:
+    - `level` solo acepta `warn` o `error`.
+    - Debe llegar `event_name` o `args` con al menos un elemento.
+    - Limite de payload: 32KB.
+    - Rate limit especifico: burst de 20 requests cada 10 segundos y 120 requests por minuto.
 
 ## Acceso y perfil
 

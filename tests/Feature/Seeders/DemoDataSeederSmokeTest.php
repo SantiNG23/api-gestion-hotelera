@@ -153,7 +153,7 @@ class DemoDataSeederSmokeTest extends TestCase
 
     private function loginHeaders(string $tenantSlug, string $email): array
     {
-        $response = $this->postJson('/api/v1/auth', [
+        $response = $this->postJson('/api/v1/auth/login', [
             'tenant_slug' => $tenantSlug,
             'email' => $email,
             'password' => 'Demo123!',
