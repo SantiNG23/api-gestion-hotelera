@@ -19,7 +19,7 @@ final class TenantContextResolver
             return (int) $tenantId;
         }
 
-        if ($request->routeIs('auth.store', 'auth.login')) {
+        if ($request->routeIs('auth.login')) {
             return $this->resolveForPublicAuth($request->all());
         }
 

@@ -12,7 +12,7 @@ class ValidateApiHeadersTest extends TestCase
     {
         $response = $this->call(
             'POST',
-            '/api/v1/auth',
+            '/api/v1/auth/login',
             [],
             [],
             [],
@@ -21,10 +21,9 @@ class ValidateApiHeadersTest extends TestCase
                 'CONTENT_TYPE' => 'application/json; charset=utf-8',
             ],
             json_encode([
-                'name' => 'Usuario Middleware',
                 'email' => 'middleware@example.com',
                 'password' => 'Password123!',
-                'password_confirmation' => 'Password123!',
+                'tenant_slug' => 'test-tenant',
             ])
         );
 
@@ -51,7 +50,7 @@ class ValidateApiHeadersTest extends TestCase
     {
         $response = $this->call(
             'POST',
-            '/api/v1/auth',
+            '/api/v1/auth/login',
             [],
             [],
             [],
@@ -60,10 +59,9 @@ class ValidateApiHeadersTest extends TestCase
                 'CONTENT_TYPE' => 'text/plain',
             ],
             json_encode([
-                'name' => 'Usuario Middleware',
                 'email' => 'middleware2@example.com',
                 'password' => 'Password123!',
-                'password_confirmation' => 'Password123!',
+                'tenant_slug' => 'test-tenant',
             ])
         );
 
@@ -75,7 +73,7 @@ class ValidateApiHeadersTest extends TestCase
     {
         $response = $this->call(
             'POST',
-            '/api/v1/auth',
+            '/api/v1/auth/login',
             [],
             [],
             [],
@@ -84,10 +82,9 @@ class ValidateApiHeadersTest extends TestCase
                 'CONTENT_TYPE' => 'application/json',
             ]
             , json_encode([
-                'name' => 'Usuario HTML',
                 'email' => 'html@example.com',
                 'password' => 'Password123!',
-                'password_confirmation' => 'Password123!',
+                'tenant_slug' => 'test-tenant',
             ])
         );
 
