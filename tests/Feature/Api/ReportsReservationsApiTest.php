@@ -72,6 +72,20 @@ class ReportsReservationsApiTest extends TestCase
                     ],
                 ],
             ],
+            'meta' => [
+                'current_page',
+                'last_page',
+                'per_page',
+                'total',
+                'from',
+                'to',
+            ],
+            'links' => [
+                'first',
+                'last',
+                'prev',
+                'next',
+            ],
         ]);
         $response->assertJsonPath('data.total', 1);
         $response->assertJsonPath('data.total_revenue', 0.0);
@@ -81,7 +95,7 @@ class ReportsReservationsApiTest extends TestCase
         $response->assertJsonPath('data.reservations.0.nights', 3);
     }
 
-    public function test_report_returns_full_collection_without_server_side_pagination(): void
+    public function test_report_uses_server_side_pagination(): void
     {
         $this->createReservation(['client_name' => 'Huesped 1', 'check_in_date' => '2026-04-01', 'check_out_date' => '2026-04-02']);
         $this->createReservation(['client_name' => 'Huesped 2', 'check_in_date' => '2026-04-03', 'check_out_date' => '2026-04-04']);
@@ -97,8 +111,9 @@ class ReportsReservationsApiTest extends TestCase
 
         $this->assertApiResponse($response);
         $response->assertJsonPath('data.total', 3);
-        $response->assertJsonCount(3, 'data.reservations');
-        $response->assertJsonMissingPath('meta.current_page');
+        $response->assertJsonPath('meta.current_page', 2);
+        $response->assertJsonPath('meta.per_page', 2);
+        $response->assertJsonCount(1, 'data.reservations');
     }
 
     public function test_can_filter_report_by_overlapping_date_range(): void

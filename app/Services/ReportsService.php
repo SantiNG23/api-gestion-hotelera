@@ -10,6 +10,7 @@ use App\Models\Reservation;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class ReportsService
 {
@@ -50,13 +51,15 @@ class ReportsService
     }
 
     /**
-     * @return array{total: int, total_revenue: float, reservations: Collection<int, Reservation>}
+     * @return array{total_revenue: float, reservations: LengthAwarePaginator}
      */
     public function getReservationsReport(array $filters): array
     {
         $startDate = Carbon::parse($filters['start_date'])->startOfDay();
         $endDateExclusive = Carbon::parse($filters['end_date'])->addDay()->startOfDay();
         $cabinId = isset($filters['cabin_id']) ? (int) $filters['cabin_id'] : null;
+        $page = isset($filters['page']) ? max((int) $filters['page'], 1) : 1;
+        $perPage = isset($filters['per_page']) ? max((int) $filters['per_page'], 1) : 10;
 
         $query = $this->reservationReportQuery($startDate, $endDateExclusive, $cabinId);
 
@@ -89,17 +92,17 @@ class ReportsService
             $sortOrder = 'asc';
         }
 
-        $reservations = $query->orderBy($sortBy, $sortOrder)->get();
-        $operationalRevenue = $reservations
-            ->filter(fn (Reservation $reservation): bool => in_array($reservation->status, self::OPERATIONAL_STATUSES, true))
-            ->sum(fn (Reservation $reservation): float => $this->calculateRevenueWithinRange($reservation, $startDate, $endDateExclusive));
+        $reservations = (clone $query)
+            ->orderBy($sortBy, $sortOrder)
+            ->paginate($perPage, ['*'], 'page', $page);
 
-        foreach ($reservations as $reservation) {
+        foreach ($reservations->getCollection() as $reservation) {
             $reservation->setAttribute('report_nights', $this->calculateOverlappingNights($reservation, $startDate, $endDateExclusive));
         }
 
+        $operationalRevenue = $this->calculateOperationalRevenue($query, $startDate, $endDateExclusive);
+
         return [
-            'total' => $reservations->count(),
             'total_revenue' => round((float) $operationalRevenue, 2),
             'reservations' => $reservations,
         ];
@@ -210,5 +213,24 @@ class ReportsService
         }
 
         return round(((float) $reservation->total_price / $reservationNights) * $overlappingNights, 2);
+    }
+
+    private function calculateOperationalRevenue(Builder $query, Carbon $rangeStart, Carbon $rangeEndExclusive): float
+    {
+        $totalRevenue = 0.0;
+
+        foreach ((clone $query)
+            ->select(['id', 'status', 'check_in_date', 'check_out_date', 'nights', 'total_price'])
+            ->orderBy('id')
+            ->cursor() as $reservation) {
+            /** @var Reservation $reservation */
+            if (! in_array($reservation->status, self::OPERATIONAL_STATUSES, true)) {
+                continue;
+            }
+
+            $totalRevenue += $this->calculateRevenueWithinRange($reservation, $rangeStart, $rangeEndExclusive);
+        }
+
+        return $totalRevenue;
     }
 }
