@@ -12,6 +12,9 @@ use App\Http\Controllers\FeatureController;
 use App\Http\Controllers\FrontendLogController;
 use App\Http\Controllers\PriceGroupController;
 use App\Http\Controllers\PriceRangeController;
+use App\Http\Controllers\ReportsGuestController;
+use App\Http\Controllers\ReportsReservationController;
+use App\Http\Controllers\ReportsSummaryController;
 use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\UserController;
 use App\Http\Middleware\FrontendObservabilityRateLimiter;
@@ -82,6 +85,9 @@ Route::prefix('v1')->group(function () {
 
         // Resumen Diario
         Route::get('daily-summary', [DailySummaryController::class, 'index'])->name('daily-summary.index');
+        Route::get('reports/guests', [ReportsGuestController::class, 'index'])->name('reports.guests.index');
+        Route::get('reports/reservations', [ReportsReservationController::class, 'index'])->name('reports.reservations.index');
+        Route::get('reports/summary', [ReportsSummaryController::class, 'index'])->name('reports.summary.index');
 
         // Observabilidad frontend
         Route::post('observability/frontend-logs', [FrontendLogController::class, 'store'])

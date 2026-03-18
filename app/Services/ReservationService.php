@@ -43,6 +43,20 @@ class ReservationService extends Service
         return $this->getAll($params['page'], $params['per_page'], $query);
     }
 
+    public function getReservationsReport(array $params): LengthAwarePaginator
+    {
+        $query = $this->model->query()
+            ->with([
+                'client' => fn ($query) => $query->withTrashed(),
+                'cabin' => fn ($query) => $query->withTrashed(),
+                'payments',
+            ]);
+
+        $query = $this->getFilteredAndSorted($query, $params);
+
+        return $this->getAll($params['page'], $params['per_page'], $query);
+    }
+
     /**
      * Obtiene una reserva por ID
      */
@@ -551,9 +565,11 @@ class ReservationService extends Service
     /**
      * Filtro por estado
      */
-    protected function filterByStatus(Builder $query, string $value): Builder
+    protected function filterByStatus(Builder $query, string|array $value): Builder
     {
-        return $query->where('status', $value);
+        return is_array($value)
+            ? $query->whereIn('status', $value)
+            : $query->where('status', $value);
     }
 
     /**
@@ -609,6 +625,27 @@ class ReservationService extends Service
             // Solo fin: devolver reservas cuya check_in_date <= end
             $query->whereDate('check_in_date', '<=', $end);
         }
+    }
+
+    protected function applySimpleSearch(Builder $query, string $value): Builder
+    {
+        $value = strtolower($value);
+
+        $query->where(function (Builder $searchQuery) use ($value): void {
+            $searchQuery->where('notes', 'like', "%{$value}%")
+                ->orWhereHas('client', function (Builder $clientQuery) use ($value): void {
+                    $clientQuery->withTrashed()
+                        ->where(function (Builder $innerQuery) use ($value): void {
+                            $innerQuery->where('name', 'like', "%{$value}%")
+                                ->orWhere('dni', 'like', "%{$value}%");
+                        });
+                })
+                ->orWhereHas('cabin', function (Builder $cabinQuery) use ($value): void {
+                    $cabinQuery->withTrashed()->where('name', 'like', "%{$value}%");
+                });
+        });
+
+        return $query;
     }
 
     /**
