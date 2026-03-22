@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Models\Client;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 
@@ -26,6 +27,7 @@ class ClientRequest extends ApiRequest
             'dni' => [
                 'string',
                 'max:20',
+                Rule::notIn([Client::DNI_BLOCK]),
             ],
             'age' => ['nullable', 'integer', 'min:0', 'max:150'],
             'city' => ['nullable', 'string', 'max:255'],
@@ -59,6 +61,7 @@ class ClientRequest extends ApiRequest
             'name.required' => 'El nombre es obligatorio',
             'dni.required' => 'El DNI es obligatorio',
             'dni.unique' => 'Ya existe un cliente con este DNI',
+            'dni.not_in' => 'El DNI tecnico de bloqueos no puede asignarse a un cliente',
             'age.integer' => 'La edad debe ser un número entero',
             'age.min' => 'La edad no puede ser negativa',
             'age.max' => 'La edad no es válida',

@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Traits\BelongsToTenant;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Validation\ValidationException;
 
 class Client extends Model
 {
@@ -41,5 +42,28 @@ class Client extends Model
     public function reservations(): HasMany
     {
         return $this->hasMany(Reservation::class);
+    }
+
+    protected function beforeUpdate(): void
+    {
+        if ($this->isSystemClient()) {
+            throw ValidationException::withMessages([
+                'dni' => ['El cliente técnico de bloqueos no puede modificarse'],
+            ]);
+        }
+    }
+
+    protected function beforeDelete(): void
+    {
+        if ($this->isSystemClient()) {
+            throw ValidationException::withMessages([
+                'dni' => ['El cliente técnico de bloqueos no puede eliminarse'],
+            ]);
+        }
+    }
+
+    private function isSystemClient(): bool
+    {
+        return $this->dni === self::DNI_BLOCK;
     }
 }

@@ -222,6 +222,12 @@ Authorization: Bearer {token}
 | DELETE | `/clients/{id}` | Si | Baja |
 | GET | `/clients/dni/{dni}` | Si | Busqueda por DNI |
 
+Autocomplete / busqueda simple:
+
+- `GET /clients?search=juan` activa la busqueda simple del backend
+- devuelve clientes que matchean por `name` o `dni`
+- en esta modalidad el backend expone `id`, `dni`, `name`, `phone` y `email`
+
 Shape habitual de `client`:
 
 ```json
@@ -373,6 +379,38 @@ Shape habitual de `reservation`:
 | GET | `/reports/occupancy` | Si | Ocupacion |
 | GET | `/reports/reservations` | Si | Reservas |
 | GET | `/reports/summary` | Si | Resumen general |
+
+### `GET /reports/guests`
+
+Reporte paginado de clientes que tuvieron al menos una reserva dentro del período consultado.
+
+Query params:
+
+- `start_date` (recomendado, `YYYY-MM-DD`)
+- `end_date` (recomendado, `YYYY-MM-DD`)
+- `query` (opcional, busca por `name` o `dni`)
+- `page` (opcional)
+- `per_page` (opcional, max `100`)
+
+Regla de filtro por fechas:
+
+- Un cliente aparece si tiene al menos una reserva no bloqueada y con estado `checked_in` o `finished`.
+- La reserva cuenta cuando solapa el rango: si al menos una noche cae entre `start_date` y `end_date`, el cliente entra.
+- El backend usa semantica inclusiva por dia: `start_date=2026-03-01&end_date=2026-03-31` incluye reservas que crucen cualquier dia de marzo.
+
+Shape habitual de item:
+
+```json
+{
+  "id": 1,
+  "name": "Juan Perez",
+  "dni": "30111222",
+  "phone": "+543764000000",
+  "email": "juan@example.com",
+  "visits": 3,
+  "last_stay": "2026-03-15"
+}
+```
 
 ## Observabilidad de logs frontend (`warn` / `error`)
 

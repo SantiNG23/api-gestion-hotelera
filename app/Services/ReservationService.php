@@ -678,9 +678,38 @@ class ReservationService extends Service
             ]);
         }
 
+        if (($clientData['dni'] ?? null) === Client::DNI_BLOCK) {
+            $systemClient = Client::query()
+                ->where('tenant_id', $tenantId)
+                ->where('dni', Client::DNI_BLOCK)
+                ->first();
+
+            if ($systemClient) {
+                if ($systemClient->trashed()) {
+                    $systemClient->restore();
+                }
+
+                return $systemClient->fresh();
+            }
+
+            return Client::query()->create([
+                'tenant_id' => $tenantId,
+                'name' => $clientData['name'] ?? 'BLOQUEO DE FECHAS',
+                'dni' => Client::DNI_BLOCK,
+                'age' => $clientData['age'] ?? null,
+                'city' => $clientData['city'] ?? null,
+                'phone' => $clientData['phone'] ?? null,
+                'email' => $clientData['email'] ?? null,
+            ]);
+        }
+
         $client = $this->clientService->searchByDni($clientData['dni']);
 
         if ($client) {
+            if ($client->dni === Client::DNI_BLOCK) {
+                return $client;
+            }
+
             // Actualizar datos si el cliente existe (pero no el DNI)
             $updatableData = Arr::except($clientData, ['dni', 'tenant_id']);
 

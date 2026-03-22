@@ -795,6 +795,26 @@ class ReservationServiceTest extends TestCase
         $this->assertEquals('newclient@example.com', $reservation->client->email);
     }
 
+    public function test_resolve_client_returns_system_client_without_updating_it(): void
+    {
+        $systemClient = Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'BLOQUEO DE FECHAS',
+            'dni' => Client::DNI_BLOCK,
+        ]);
+
+        $reservation = $this->service->createReservation([
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+            'check_out_date' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
+            'num_guests' => 2,
+            'is_blocked' => true,
+        ]);
+
+        $this->assertEquals($systemClient->id, $reservation->client_id);
+        $this->assertEquals(Client::DNI_BLOCK, $reservation->client->dni);
+    }
+
     // ============= Pruebas de Bloqueos (Blocking) =============
 
     public function test_create_blocked_reservation_has_zero_price(): void

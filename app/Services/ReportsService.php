@@ -220,7 +220,7 @@ class ReportsService
         $totalRevenue = 0.0;
 
         foreach ((clone $query)
-            ->select(['id', 'status', 'check_in_date', 'check_out_date', 'nights', 'total_price'])
+            ->select(['id', 'status', 'check_in_date', 'check_out_date', 'total_price'])
             ->orderBy('id')
             ->cursor() as $reservation) {
             /** @var Reservation $reservation */

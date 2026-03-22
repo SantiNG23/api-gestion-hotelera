@@ -59,6 +59,35 @@ class ReportsGuestsApiTest extends TestCase
         $response->assertJsonPath('data.0.last_stay', '2026-02-10');
     }
 
+    public function test_can_filter_guests_report_by_overlapping_date_range(): void
+    {
+        $matchingGuest = $this->createGuest('Guest Rango', '33445566');
+        $outsideGuest = $this->createGuest('Guest Fuera', '77889911');
+
+        $this->createReservationForGuest($matchingGuest, [
+            'status' => Reservation::STATUS_FINISHED,
+            'check_in_date' => '2026-03-10',
+            'check_out_date' => '2026-03-15',
+        ]);
+
+        $this->createReservationForGuest($outsideGuest, [
+            'status' => Reservation::STATUS_FINISHED,
+            'check_in_date' => '2026-04-01',
+            'check_out_date' => '2026-04-03',
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/reports/guests?'.http_build_query([
+                'start_date' => '2026-03-12',
+                'end_date' => '2026-03-12',
+            ]));
+
+        $this->assertPaginatedResponse($response);
+        $response->assertJsonCount(1, 'data');
+        $response->assertJsonPath('data.0.id', $matchingGuest->id);
+        $response->assertJsonPath('data.0.name', 'Guest Rango');
+    }
+
     public function test_can_search_guests_report_by_partial_name(): void
     {
         $matchingGuest = $this->createGuest('Maria Gonzalez', '22334455');

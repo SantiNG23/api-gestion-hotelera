@@ -6,8 +6,10 @@ namespace App\Services;
 
 use App\Models\Client;
 use App\Models\Reservation;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Validation\ValidationException;
 
 class ClientService extends Service
 {
@@ -34,17 +36,31 @@ class ClientService extends Service
     {
         $this->requireTenantId();
 
+        $dateRange = $params['date_range'] ?? [];
+        $startDate = $params['start_date'] ?? $dateRange['start'] ?? null;
+        $endDate = $params['end_date'] ?? $dateRange['end'] ?? null;
+
+        $rangeStart = $startDate !== null
+            ? Carbon::parse($startDate)->startOfDay()
+            : null;
+        $rangeEndExclusive = $endDate !== null
+            ? Carbon::parse($endDate)->addDay()->startOfDay()
+            : null;
+
         $query = $this->model->query()
             ->where('dni', '!=', Client::DNI_BLOCK)
-            ->whereHas('reservations', fn (Builder $reservationQuery): Builder => $this->applyGuestVisitFilter($reservationQuery))
+            ->whereHas('reservations', fn (Builder $reservationQuery): Builder => $this->applyGuestVisitFilter($reservationQuery, $rangeStart, $rangeEndExclusive))
             ->withCount([
-                'reservations as visits' => fn (Builder $reservationQuery): Builder => $this->applyGuestVisitFilter($reservationQuery),
+                'reservations as visits' => fn (Builder $reservationQuery): Builder => $this->applyGuestVisitFilter($reservationQuery, $rangeStart, $rangeEndExclusive),
             ])
             ->withMax([
-                'reservations as last_stay' => fn (Builder $reservationQuery): Builder => $this->applyGuestVisitFilter($reservationQuery),
+                'reservations as last_stay' => fn (Builder $reservationQuery): Builder => $this->applyGuestVisitFilter($reservationQuery, $rangeStart, $rangeEndExclusive),
             ], 'check_in_date');
 
-        $query = $this->getFilteredAndSorted($query, $params);
+        $queryParams = $params;
+        unset($queryParams['date_range']);
+
+        $query = $this->getFilteredAndSorted($query, $queryParams);
         $query->orderBy('name');
 
         return $this->getAll($params['page'], $params['per_page'], $query);
@@ -109,6 +125,14 @@ class ClientService extends Service
      */
     public function deleteClient(int $id): bool
     {
+        $client = $this->getById($id);
+
+        if ($client->dni === Client::DNI_BLOCK) {
+            throw ValidationException::withMessages([
+                'dni' => ['El cliente técnico de bloqueos no puede eliminarse'],
+            ]);
+        }
+
         return $this->delete($id);
     }
 
@@ -139,13 +163,40 @@ class ClientService extends Service
         return ['name', 'dni', 'city', 'phone', 'email'];
     }
 
-    private function applyGuestVisitFilter(Builder $query): Builder
+    /**
+     * Búsqueda simple para autocompletes de clientes
+     */
+    protected function applySimpleSearch(Builder $query, string $value): Builder
     {
-        return $query
+        $value = strtolower($value);
+
+        $query->select(['id', 'dni', 'name', 'phone', 'email'])
+            ->where(function (Builder $searchQuery) use ($value): void {
+                $searchQuery->where('name', 'like', "%{$value}%")
+                    ->orWhere('dni', 'like', "%{$value}%");
+            });
+
+        return $query;
+    }
+
+    private function applyGuestVisitFilter(
+        Builder $query,
+        ?Carbon $rangeStart = null,
+        ?Carbon $rangeEndExclusive = null
+    ): Builder {
+        $query = $query
             ->where('is_blocked', false)
             ->whereIn('status', [
                 Reservation::STATUS_CHECKED_IN,
                 Reservation::STATUS_FINISHED,
             ]);
+
+        if ($rangeStart !== null && $rangeEndExclusive !== null) {
+            $query
+                ->whereDate('check_in_date', '<', $rangeEndExclusive->toDateString())
+                ->whereDate('check_out_date', '>', $rangeStart->toDateString());
+        }
+
+        return $query;
     }
 }

@@ -21,7 +21,7 @@ class ClientController extends Controller
      */
     protected function getAllowedFilters(): array
     {
-        return ['name', 'dni', 'city', 'global'];
+        return ['name', 'dni', 'city', 'global', 'search'];
     }
 
     /**

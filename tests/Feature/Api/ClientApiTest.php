@@ -80,6 +80,18 @@ class ClientApiTest extends TestCase
             ->assertJsonValidationErrors(['dni']);
     }
 
+    public function test_cannot_create_system_client_via_api(): void
+    {
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/v1/clients', [
+                'name' => 'BLOQUEO DE FECHAS',
+                'dni' => Client::DNI_BLOCK,
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['dni']);
+    }
+
     public function test_can_show_client(): void
     {
         $client = Client::factory()->create(['tenant_id' => $this->tenant->id]);
@@ -118,6 +130,52 @@ class ClientApiTest extends TestCase
 
         $this->assertApiResponse($response);
         $this->assertSoftDeleted('clients', ['id' => $client->id]);
+    }
+
+    public function test_cannot_delete_system_client(): void
+    {
+        $client = Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'dni' => Client::DNI_BLOCK,
+            'name' => 'BLOQUEO DE FECHAS',
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->deleteJson("/api/v1/clients/{$client->id}");
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['dni']);
+
+        $this->assertDatabaseHas('clients', [
+            'id' => $client->id,
+            'deleted_at' => null,
+        ]);
+    }
+
+    public function test_cannot_update_system_client(): void
+    {
+        \Illuminate\Support\Facades\Event::fakeExcept([
+            'eloquent.updating: '.Client::class,
+        ]);
+
+        $client = Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'dni' => Client::DNI_BLOCK,
+            'name' => 'BLOQUEO DE FECHAS',
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->putJson("/api/v1/clients/{$client->id}", [
+                'name' => 'Nombre Cambiado',
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['dni']);
+
+        $this->assertDatabaseHas('clients', [
+            'id' => $client->id,
+            'name' => 'BLOQUEO DE FECHAS',
+        ]);
     }
 
     public function test_can_search_client_by_dni(): void
@@ -179,5 +237,31 @@ class ClientApiTest extends TestCase
         $response->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', $matchingClient->id)
             ->assertJsonPath('data.0.dni', '12345678');
+    }
+
+    public function test_can_use_simple_search_for_clients_autocomplete(): void
+    {
+        $matchingClient = Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Juan Autocomplete',
+            'dni' => '55667788',
+        ]);
+
+        Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Otro Cliente',
+            'dni' => '11223344',
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/clients?search=autocomplete&per_page=10');
+
+        $this->assertPaginatedResponse($response);
+        $response->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $matchingClient->id)
+            ->assertJsonPath('data.0.name', 'Juan Autocomplete')
+            ->assertJsonPath('data.0.dni', '55667788')
+            ->assertJsonPath('data.0.phone', $matchingClient->phone)
+            ->assertJsonPath('data.0.email', $matchingClient->email);
     }
 }
