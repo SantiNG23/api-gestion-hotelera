@@ -249,8 +249,8 @@ class ReportsGuestsApiTest extends TestCase
         $this->assertPaginatedResponse($response);
         $response->assertJsonCount(1, 'data');
         $response->assertJsonPath('data.0.id', $guest->id);
-        $response->assertJsonPath('data.0.visits', 2);
-        $response->assertJsonPath('data.0.last_stay', '2026-03-15');
+        $response->assertJsonPath('data.0.visits', 3);
+        $response->assertJsonPath('data.0.last_stay', '2026-04-01');
     }
 
     private function createGuest(string $name, string $dni, ?string $phone = null, ?string $email = null): Client

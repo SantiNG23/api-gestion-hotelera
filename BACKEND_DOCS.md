@@ -361,6 +361,12 @@ Shape habitual de `reservation`:
 }
 ```
 
+Nota para reportes:
+
+- `reports/reservations`, `reports/occupancy`, `reports/guests` y `reports/summary` solo consideran reservas operativas.
+- Estados operativos: `confirmed`, `checked_in`, `finished`.
+- Se excluyen reservas bloqueadas y estados como `pending_confirmation` y `cancelled`.
+
 ### Disponibilidad
 
 | Metodo | Ruta | Auth | Uso principal |
@@ -395,6 +401,7 @@ Query params:
 Regla de filtro por fechas:
 
 - Un cliente aparece si tiene al menos una reserva no bloqueada y con estado `checked_in` o `finished`.
+- Un cliente aparece si tiene al menos una reserva no bloqueada y con estado `confirmed`, `checked_in` o `finished`.
 - La reserva cuenta cuando solapa el rango: si al menos una noche cae entre `start_date` y `end_date`, el cliente entra.
 - El backend usa semantica inclusiva por dia: `start_date=2026-03-01&end_date=2026-03-31` incluye reservas que crucen cualquier dia de marzo.
 

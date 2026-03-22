@@ -40,7 +40,7 @@ class ReportsReservationsApiTest extends TestCase
             'cabin_id' => $this->cabinA->id,
             'check_in_date' => '2026-04-10',
             'check_out_date' => '2026-04-13',
-            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'status' => Reservation::STATUS_CONFIRMED,
             'pending_until' => Carbon::parse('2026-04-09 18:00:00'),
             'total_price' => 350,
         ]);
@@ -88,7 +88,7 @@ class ReportsReservationsApiTest extends TestCase
             ],
         ]);
         $response->assertJsonPath('data.total', 1);
-        $response->assertJsonPath('data.total_revenue', 0.0);
+        $response->assertJsonPath('data.total_revenue', 350.0);
         $response->assertJsonPath('data.reservations.0.id', $reservation->id);
         $response->assertJsonPath('data.reservations.0.client.name', 'Ana Perez');
         $response->assertJsonPath('data.reservations.0.cabin.name', 'Cabana Arrayan');
@@ -278,7 +278,7 @@ class ReportsReservationsApiTest extends TestCase
             ]));
 
         $this->assertApiResponse($response);
-        $response->assertJsonPath('data.total', 5);
+        $response->assertJsonPath('data.total', 3);
         $response->assertJsonPath('data.total_revenue', 900.0);
     }
 
@@ -318,7 +318,7 @@ class ReportsReservationsApiTest extends TestCase
             'cabin_id' => $overrides['cabin_id'] ?? $this->cabinA->id,
             'check_in_date' => $overrides['check_in_date'] ?? '2026-04-10',
             'check_out_date' => $overrides['check_out_date'] ?? '2026-04-12',
-            'status' => $overrides['status'] ?? Reservation::STATUS_PENDING_CONFIRMATION,
+            'status' => $overrides['status'] ?? Reservation::STATUS_CONFIRMED,
             'pending_until' => $overrides['pending_until'] ?? now()->addDay(),
             'total_price' => $overrides['total_price'] ?? 200,
             'deposit_amount' => $overrides['deposit_amount'] ?? 100,

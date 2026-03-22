@@ -132,7 +132,8 @@ class ReportsService
         }
 
         $occupiedNightsByCabin = Reservation::query()
-            ->blocking()
+            ->where('is_blocked', false)
+            ->whereIn('status', self::OPERATIONAL_STATUSES)
             ->when($cabinId !== null, fn (Builder $query): Builder => $query->where('cabin_id', $cabinId))
             ->whereDate('check_in_date', '<', $rangeEndExclusive->toDateString())
             ->whereDate('check_out_date', '>', $rangeStart->toDateString())
@@ -186,6 +187,7 @@ class ReportsService
                 'cabin' => fn ($query) => $query->withTrashed(),
             ])
             ->where('is_blocked', false)
+            ->whereIn('status', self::OPERATIONAL_STATUSES)
             ->when($cabinId !== null, fn (Builder $query): Builder => $query->where('cabin_id', $cabinId))
             ->whereDate('check_in_date', '<', $rangeEndExclusive->toDateString())
             ->whereDate('check_out_date', '>', $rangeStart->toDateString());

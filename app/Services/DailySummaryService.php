@@ -69,7 +69,9 @@ class DailySummaryService
     public function getCheckOutsForDate(Carbon $date): Collection
     {
         return Reservation::whereDate('check_out_date', $date)
+            ->where('is_blocked', false)
             ->whereIn('status', [
+                Reservation::STATUS_CONFIRMED,
                 Reservation::STATUS_CHECKED_IN,
             ])
             ->with([
@@ -117,7 +119,7 @@ class DailySummaryService
     public function getReportsSummary(Carbon $startDate, Carbon $endDate, ?int $cabinId = null): array
     {
         $pendingDeposits = $this->baseReportsReservationQuery($startDate, $endDate, $cabinId)
-            ->where('status', Reservation::STATUS_PENDING_CONFIRMATION)
+            ->where('status', Reservation::STATUS_CONFIRMED)
             ->whereDoesntHave('payments', function ($query) {
                 $query->where('payment_type', ReservationPayment::TYPE_DEPOSIT);
             })
@@ -137,6 +139,8 @@ class DailySummaryService
     private function baseReportsReservationQuery(Carbon $startDate, Carbon $endDate, ?int $cabinId = null): \Illuminate\Database\Eloquent\Builder
     {
         return Reservation::query()
+            ->where('is_blocked', false)
+            ->whereIn('status', [Reservation::STATUS_CONFIRMED, Reservation::STATUS_CHECKED_IN, Reservation::STATUS_FINISHED])
             ->when($cabinId !== null, function ($query) use ($cabinId) {
                 $query->where('cabin_id', $cabinId);
             })
@@ -160,7 +164,9 @@ class DailySummaryService
             return 0.0;
         }
 
-        $occupiedUnits = Reservation::blocking()
+        $occupiedUnits = Reservation::query()
+            ->where('is_blocked', false)
+            ->whereIn('status', [Reservation::STATUS_CONFIRMED, Reservation::STATUS_CHECKED_IN, Reservation::STATUS_FINISHED])
             ->when($cabinId !== null, function ($query) use ($cabinId) {
                 $query->where('cabin_id', $cabinId);
             })

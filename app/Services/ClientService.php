@@ -187,6 +187,7 @@ class ClientService extends Service
         $query = $query
             ->where('is_blocked', false)
             ->whereIn('status', [
+                Reservation::STATUS_CONFIRMED,
                 Reservation::STATUS_CHECKED_IN,
                 Reservation::STATUS_FINISHED,
             ]);

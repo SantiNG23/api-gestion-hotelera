@@ -42,7 +42,7 @@ class ReportsOccupancyApiTest extends TestCase
             'tenant_id' => $this->tenant->id,
             'client_id' => $this->client->id,
             'cabin_id' => $this->cabinB->id,
-            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'status' => Reservation::STATUS_CONFIRMED,
             'pending_until' => now()->addDay(),
             'check_in_date' => '2026-04-11',
             'check_out_date' => '2026-04-13',

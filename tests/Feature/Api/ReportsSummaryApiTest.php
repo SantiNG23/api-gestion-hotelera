@@ -102,7 +102,7 @@ class ReportsSummaryApiTest extends TestCase
             'tenant_id' => $this->tenant->id,
             'client_id' => $this->client->id,
             'cabin_id' => $this->cabinA->id,
-            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'status' => Reservation::STATUS_CONFIRMED,
             'check_in_date' => $startDate->copy(),
             'check_out_date' => $startDate->copy()->addDays(2),
             'pending_until' => now()->addDay(),
@@ -122,7 +122,7 @@ class ReportsSummaryApiTest extends TestCase
             'tenant_id' => $this->tenant->id,
             'client_id' => $this->client->id,
             'cabin_id' => $this->cabinA->id,
-            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'status' => Reservation::STATUS_CONFIRMED,
             'check_in_date' => $startDate->copy()->addDay(),
             'check_out_date' => $endDate->copy()->addDay(),
             'pending_until' => now()->subDay(),
@@ -136,10 +136,10 @@ class ReportsSummaryApiTest extends TestCase
             ]));
 
         $this->assertApiResponse($response);
-        $response->assertJsonPath('data.occupancy_rate', 66.67);
-        $response->assertJsonPath('data.nights_sold', 2);
+        $response->assertJsonPath('data.occupancy_rate', 100.0);
+        $response->assertJsonPath('data.nights_sold', 6);
         $response->assertJsonPath('data.total_reservations', 3);
-        $response->assertJsonPath('data.operational_revenue', 500.0);
+        $response->assertJsonPath('data.operational_revenue', 1200.0);
     }
 
     public function test_can_filter_summary_by_cabin(): void
@@ -160,7 +160,7 @@ class ReportsSummaryApiTest extends TestCase
             'tenant_id' => $this->tenant->id,
             'client_id' => $this->client->id,
             'cabin_id' => $this->cabinB->id,
-            'status' => Reservation::STATUS_PENDING_CONFIRMATION,
+            'status' => Reservation::STATUS_CONFIRMED,
             'check_in_date' => $startDate->copy(),
             'check_out_date' => $startDate->copy()->addDays(2),
             'pending_until' => now()->addDay(),
