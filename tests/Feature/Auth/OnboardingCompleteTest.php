@@ -227,12 +227,75 @@ class OnboardingCompleteTest extends TestCase
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
 
+    #[Test]
+    public function it_applies_the_specific_onboarding_rate_limit_to_complete(): void
+    {
+        for ($attempt = 0; $attempt < 10; $attempt++) {
+            $token = 'btp_live_complete_rate_limit_'.$attempt;
+            $this->createInvitationForToken($token, [
+                'email' => 'owner'.$attempt.'@cliente.com',
+            ]);
+
+            $this->postJson('/api/v1/auth/onboarding/complete', $this->validPayload($token, [
+                'tenant' => [
+                    'slug' => 'hotel-demo-'.$attempt,
+                ],
+            ]))->assertCreated();
+        }
+
+        $token = 'btp_live_complete_rate_limit_blocked';
+        $this->createInvitationForToken($token, [
+            'email' => 'blocked@cliente.com',
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/onboarding/complete', $this->validPayload($token, [
+            'tenant' => [
+                'slug' => 'hotel-demo-blocked',
+            ],
+        ]));
+
+        $response->assertStatus(429)
+            ->assertHeader('X-RateLimit-Limit', '10')
+            ->assertJsonPath('errors.code.0', 'rate_limited');
+
+        $this->assertNull($this->findInvitationByToken($token)?->consumed_at);
+    }
+
+    #[Test]
+    public function it_can_complete_onboarding_without_marking_email_as_verified_and_queue_the_welcome_mail(): void
+    {
+        config()->set('onboarding.completion.mark_email_as_verified', false);
+        config()->set('onboarding.completion.send_welcome_mail', true);
+
+        $token = 'btp_live_complete_mail_policy';
+        $this->createInvitationForToken($token, [
+            'email' => 'owner@cliente.com',
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/onboarding/complete', $this->validPayload($token, [
+            'tenant' => [
+                'slug' => 'hotel-demo-mail-policy',
+            ],
+        ]));
+
+        $response->assertCreated();
+
+        $owner = User::query()->sole();
+
+        $this->assertNull($owner->email_verified_at);
+        $this->assertDatabaseHas('user_settings', [
+            'user_id' => $owner->id,
+            'tenant_id' => $owner->tenant_id,
+        ]);
+        Mail::assertQueued(\App\Mail\WelcomeUserMail::class);
+    }
+
     /**
      * @return array<string, mixed>
      */
-    private function validPayload(string $token): array
+    private function validPayload(string $token, array $overrides = []): array
     {
-        return [
+        return array_replace_recursive([
             'token' => $token,
             'tenant' => [
                 'name' => 'Hotel Demo',
@@ -243,7 +306,7 @@ class OnboardingCompleteTest extends TestCase
                 'password' => 'Secret123!',
                 'password_confirmation' => 'Secret123!',
             ],
-        ];
+        ], $overrides);
     }
 
     /**
@@ -254,5 +317,12 @@ class OnboardingCompleteTest extends TestCase
         return OnboardingInvitation::factory()->create(array_merge([
             'token_hash' => app(OnboardingTokenService::class)->hashToken($token),
         ], $attributes));
+    }
+
+    private function findInvitationByToken(string $token): ?OnboardingInvitation
+    {
+        return OnboardingInvitation::query()
+            ->where('token_hash', app(OnboardingTokenService::class)->hashToken($token))
+            ->first();
     }
 }

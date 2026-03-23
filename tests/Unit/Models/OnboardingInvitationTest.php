@@ -71,4 +71,23 @@ class OnboardingInvitationTest extends TestCase
         $this->assertSame(OnboardingInvitation::STATUS_REVOKED, $invitation->status);
         $this->assertTrue($invitation->isRevoked());
     }
+
+    #[Test]
+    public function it_prioritizes_terminal_statuses_in_a_stable_order(): void
+    {
+        $revokedInvitation = OnboardingInvitation::factory()->make([
+            'expires_at' => now()->subMinute(),
+            'consumed_at' => now()->subMinutes(2),
+            'revoked_at' => now()->subMinutes(3),
+        ]);
+
+        $consumedInvitation = OnboardingInvitation::factory()->make([
+            'expires_at' => now()->subMinute(),
+            'consumed_at' => now()->subMinutes(2),
+            'revoked_at' => null,
+        ]);
+
+        $this->assertSame(OnboardingInvitation::STATUS_REVOKED, $revokedInvitation->status);
+        $this->assertSame(OnboardingInvitation::STATUS_CONSUMED, $consumedInvitation->status);
+    }
 }

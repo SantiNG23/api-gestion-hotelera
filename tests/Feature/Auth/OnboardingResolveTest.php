@@ -45,6 +45,27 @@ class OnboardingResolveTest extends TestCase
     }
 
     #[Test]
+    public function it_returns_a_null_prefill_and_hides_sensitive_fields_when_the_invitation_has_no_prefill(): void
+    {
+        $token = 'btp_live_without_prefill';
+        $invitation = $this->createInvitationForToken($token, [
+            'email' => 'owner@cliente.com',
+            'tenant_name_prefill' => null,
+            'tenant_slug_prefill' => null,
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/onboarding/resolve', [
+            'token' => $token,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.tenant_prefill', null)
+            ->assertJsonMissingPath('data.token_hash')
+            ->assertJsonMissingPath('data.created_by')
+            ->assertJsonPath('data.expires_at', $invitation->expires_at->clone()->utc()->toIso8601String());
+    }
+
+    #[Test]
     public function it_rejects_an_invalid_request_for_resolve(): void
     {
         $response = $this->postJson('/api/v1/auth/onboarding/resolve', [
