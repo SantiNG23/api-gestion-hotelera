@@ -11,7 +11,7 @@ final class CompleteOnboardingRequest extends ApiRequest
     public function rules(): array
     {
         return [
-            'token' => ['required', 'string'],
+            'token' => ['required', 'string', 'max:255'],
             'tenant' => ['required', 'array'],
             'tenant.name' => ['required', 'string', 'max:255'],
             'tenant.slug' => ['required', 'string', 'max:255', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/'],
@@ -47,11 +47,18 @@ final class CompleteOnboardingRequest extends ApiRequest
         $this->replace($input);
     }
 
-    private function sanitizeValue(mixed $value): mixed
+    /**
+     * @param  array<int, string|int>  $path
+     */
+    private function sanitizeValue(mixed $value, array $path = []): mixed
     {
+        if ($this->shouldSkipSanitization($path)) {
+            return $value;
+        }
+
         if (is_array($value)) {
             foreach ($value as $key => $item) {
-                $value[$key] = $this->sanitizeValue($item);
+                $value[$key] = $this->sanitizeValue($item, [...$path, $key]);
             }
 
             return $value;
@@ -68,11 +75,21 @@ final class CompleteOnboardingRequest extends ApiRequest
         return $value;
     }
 
+    /**
+     * @param  array<int, string|int>  $path
+     */
+    private function shouldSkipSanitization(array $path): bool
+    {
+        return $path === ['user', 'password']
+            || $path === ['user', 'password_confirmation'];
+    }
+
     public function messages(): array
     {
         return [
             'token.required' => 'El token es obligatorio.',
             'token.string' => 'El token debe ser una cadena valida.',
+            'token.max' => 'El token no puede tener mas de 255 caracteres.',
             'tenant.required' => 'Los datos del tenant son obligatorios.',
             'tenant.array' => 'Los datos del tenant son invalidos.',
             'tenant.name.required' => 'El nombre del tenant es obligatorio.',

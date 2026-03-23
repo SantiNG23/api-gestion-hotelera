@@ -10,8 +10,10 @@ use App\Models\User;
 use App\Services\AuthService;
 use App\Services\Onboarding\CompleteOnboardingService;
 use App\Services\Onboarding\OnboardingTokenService;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
+use Mockery;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
 use Tests\TestCase;
@@ -104,6 +106,16 @@ class OnboardingCompleteTest extends TestCase
         $response->assertStatus(422)
             ->assertJsonPath('errors.code.0', 'invalid_request')
             ->assertJsonValidationErrors(['tenant_id', 'user.email']);
+    }
+
+    #[Test]
+    public function it_rejects_tokens_longer_than_255_characters_for_complete(): void
+    {
+        $response = $this->postJson('/api/v1/auth/onboarding/complete', $this->validPayload(str_repeat('a', 256)));
+
+        $response->assertStatus(422)
+            ->assertJsonPath('errors.code.0', 'invalid_request')
+            ->assertJsonPath('errors.token.0', 'El token no puede tener mas de 255 caracteres.');
     }
 
     #[Test]
@@ -204,6 +216,8 @@ class OnboardingCompleteTest extends TestCase
     #[Test]
     public function it_rolls_back_and_returns_onboarding_unavailable_when_a_critical_failure_happens(): void
     {
+        Exceptions::fake();
+
         $token = 'btp_live_unavailable';
         $invitation = $this->createInvitationForToken($token);
 
@@ -225,6 +239,7 @@ class OnboardingCompleteTest extends TestCase
         $this->assertDatabaseCount('users', 0);
         $this->assertDatabaseCount('user_settings', 0);
         $this->assertDatabaseCount('personal_access_tokens', 0);
+        Exceptions::assertReported(RuntimeException::class);
     }
 
     #[Test]
@@ -288,6 +303,57 @@ class OnboardingCompleteTest extends TestCase
             'tenant_id' => $owner->tenant_id,
         ]);
         Mail::assertQueued(\App\Mail\WelcomeUserMail::class);
+    }
+
+    #[Test]
+    public function it_does_not_sanitize_user_password_fields_during_complete(): void
+    {
+        $token = 'btp_live_password_whitespace';
+        $password = '  Secret123!  ';
+        $tenant = Tenant::factory()->create([
+            'slug' => 'hotel-demo-password',
+        ]);
+        $owner = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'email' => 'owner@cliente.com',
+            'role' => User::ROLE_OWNER,
+        ]);
+
+        $this->createInvitationForToken($token, [
+            'email' => 'owner@cliente.com',
+        ]);
+
+        $capturedPayload = null;
+        $service = Mockery::mock(CompleteOnboardingService::class);
+        $service->shouldReceive('complete')
+            ->once()
+            ->withArgs(function (array $payload) use (&$capturedPayload): bool {
+                $capturedPayload = $payload;
+
+                return true;
+            })
+            ->andReturn([
+                'token' => 'plain-text-token',
+                'user' => $owner,
+                'tenant' => $tenant,
+            ]);
+
+        $this->app->instance(CompleteOnboardingService::class, $service);
+
+        $response = $this->postJson('/api/v1/auth/onboarding/complete', $this->validPayload($token, [
+            'tenant' => [
+                'slug' => 'hotel-demo-password',
+            ],
+            'user' => [
+                'password' => $password,
+                'password_confirmation' => $password,
+            ],
+        ]));
+
+        $response->assertCreated();
+
+        $this->assertSame($token, $capturedPayload['token']);
+        $this->assertSame($password, $capturedPayload['user']['password']);
     }
 
     /**

@@ -47,7 +47,9 @@ class OnboardingController extends Controller
             );
         } catch (OnboardingException $exception) {
             return $this->errorResponse($exception->getMessage(), $exception->status(), $exception->errors());
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            report($exception);
+
             return $this->errorResponse(
                 'El onboarding no esta disponible temporalmente.',
                 503,

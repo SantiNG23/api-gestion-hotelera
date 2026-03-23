@@ -9,7 +9,7 @@ final class ResolveOnboardingInvitationRequest extends ApiRequest
     public function rules(): array
     {
         return [
-            'token' => ['required', 'string'],
+            'token' => ['required', 'string', 'max:255'],
             'tenant_id' => ['prohibited'],
             'email' => ['prohibited'],
             'role' => ['prohibited'],
@@ -23,6 +23,7 @@ final class ResolveOnboardingInvitationRequest extends ApiRequest
         return [
             'token.required' => 'El token es obligatorio.',
             'token.string' => 'El token debe ser una cadena valida.',
+            'token.max' => 'El token no puede tener mas de 255 caracteres.',
             'tenant_id.prohibited' => 'El tenant_id no puede enviarse en onboarding.',
             'email.prohibited' => 'El email no puede enviarse en onboarding.',
             'role.prohibited' => 'El role no puede enviarse en onboarding.',

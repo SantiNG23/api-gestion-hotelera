@@ -78,6 +78,18 @@ class OnboardingResolveTest extends TestCase
     }
 
     #[Test]
+    public function it_rejects_tokens_longer_than_255_characters_for_resolve(): void
+    {
+        $response = $this->postJson('/api/v1/auth/onboarding/resolve', [
+            'token' => str_repeat('a', 256),
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonPath('errors.code.0', 'invalid_request')
+            ->assertJsonPath('errors.token.0', 'El token no puede tener mas de 255 caracteres.');
+    }
+
+    #[Test]
     public function it_returns_token_invalid_when_the_invitation_does_not_exist(): void
     {
         $response = $this->postJson('/api/v1/auth/onboarding/resolve', [
