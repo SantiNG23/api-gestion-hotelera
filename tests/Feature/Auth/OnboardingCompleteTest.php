@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\AuthService;
 use App\Services\Onboarding\CompleteOnboardingService;
 use App\Services\Onboarding\OnboardingTokenService;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
@@ -20,6 +21,9 @@ class OnboardingCompleteTest extends TestCase
     #[Test]
     public function it_completes_onboarding_with_a_transactional_auth_response(): void
     {
+        config()->set('onboarding.completion.mark_email_as_verified', true);
+        config()->set('onboarding.completion.send_welcome_mail', false);
+
         $token = 'btp_live_complete_success';
         $invitation = $this->createInvitationForToken($token, [
             'email' => 'owner@cliente.com',
@@ -66,6 +70,7 @@ class OnboardingCompleteTest extends TestCase
             'email' => 'owner@cliente.com',
             'role' => 'owner',
         ]);
+        $this->assertNotNull(User::query()->findOrFail($userId)->email_verified_at);
         $this->assertDatabaseHas('user_settings', [
             'user_id' => $userId,
             'tenant_id' => $tenantId,
@@ -75,6 +80,7 @@ class OnboardingCompleteTest extends TestCase
         $this->assertNotNull($invitation->fresh()->consumed_at);
         $this->assertNotNull($response->json('data.token'));
         $this->assertDatabaseCount('personal_access_tokens', 1);
+        Mail::assertNothingQueued();
     }
 
     #[Test]
@@ -165,6 +171,7 @@ class OnboardingCompleteTest extends TestCase
 
         $this->assertDatabaseCount('tenants', 1);
         $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseCount('user_settings', 1);
     }
 
     #[Test]

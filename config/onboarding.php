@@ -8,4 +8,9 @@ return [
     'invitation' => [
         'expires_in_hours' => (int) env('ONBOARDING_INVITATION_EXPIRES_IN_HOURS', 72),
     ],
+
+    'completion' => [
+        'mark_email_as_verified' => true,
+        'send_welcome_mail' => false,
+    ],
 ];

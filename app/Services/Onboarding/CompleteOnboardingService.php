@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Onboarding;
 
 use App\Exceptions\OnboardingException;
+use App\Mail\WelcomeUserMail;
 use App\Models\OnboardingInvitation;
 use App\Models\Tenant;
 use App\Models\User;
@@ -12,7 +13,9 @@ use App\Models\UserSetting;
 use App\Services\AuthService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -41,6 +44,7 @@ class CompleteOnboardingService
         return DB::transaction(function () use ($payload): array {
             $invitation = $this->findPendingInvitationForUpdate((string) $payload['token']);
             $tenantAttributes = $this->buildTenantAttributes(Arr::get($payload, 'tenant', []));
+            $completedAt = now();
 
             if (Tenant::query()->where('slug', $tenantAttributes['slug'])->exists()) {
                 throw OnboardingException::tenantSlugTaken();
@@ -52,14 +56,12 @@ class CompleteOnboardingService
                     'name' => Arr::get($payload, 'user.name'),
                     'email' => $invitation->email,
                     'password' => Arr::get($payload, 'user.password'),
-                    'email_verified_at' => now(),
+                    'email_verified_at' => $this->resolveOwnerEmailVerifiedAt($completedAt),
                 ]);
 
                 $this->createOwnerSettings($owner);
-
-                $invitation->forceFill([
-                    'consumed_at' => now(),
-                ])->save();
+                $this->markInvitationAsConsumed($invitation, $completedAt);
+                $this->dispatchWelcomeMail($owner);
 
                 $owner->loadMissing('tenant');
 
@@ -109,6 +111,26 @@ class CompleteOnboardingService
         return $settings;
     }
 
+    protected function resolveOwnerEmailVerifiedAt(Carbon $completedAt): ?Carbon
+    {
+        if (! config('onboarding.completion.mark_email_as_verified', true)) {
+            return null;
+        }
+
+        return $completedAt;
+    }
+
+    protected function dispatchWelcomeMail(User $owner): void
+    {
+        if (! config('onboarding.completion.send_welcome_mail', false)) {
+            return;
+        }
+
+        DB::afterCommit(static function () use ($owner): void {
+            Mail::to($owner)->queue(new WelcomeUserMail($owner));
+        });
+    }
+
     protected function findPendingInvitationForUpdate(string $plainTextToken): OnboardingInvitation
     {
         $invitation = OnboardingInvitation::query()
@@ -133,6 +155,40 @@ class CompleteOnboardingService
         }
 
         return $invitation;
+    }
+
+    protected function markInvitationAsConsumed(OnboardingInvitation $invitation, Carbon $consumedAt): void
+    {
+        $updatedRows = OnboardingInvitation::query()
+            ->whereKey($invitation->getKey())
+            ->whereNull('consumed_at')
+            ->whereNull('revoked_at')
+            ->where('expires_at', '>', $consumedAt)
+            ->update([
+                'consumed_at' => $consumedAt,
+            ]);
+
+        if ($updatedRows !== 1) {
+            $invitation->refresh();
+
+            if ($invitation->isRevoked()) {
+                throw OnboardingException::tokenRevoked();
+            }
+
+            if ($invitation->isConsumed()) {
+                throw OnboardingException::tokenConsumed();
+            }
+
+            if ($invitation->isExpired()) {
+                throw OnboardingException::tokenExpired();
+            }
+
+            throw OnboardingException::tokenInvalid();
+        }
+
+        $invitation->forceFill([
+            'consumed_at' => $consumedAt,
+        ]);
     }
 
     private function isTenantSlugUniqueViolation(QueryException $exception): bool
