@@ -22,6 +22,7 @@ return new class extends Migration
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->json('meta')->nullable();
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 
