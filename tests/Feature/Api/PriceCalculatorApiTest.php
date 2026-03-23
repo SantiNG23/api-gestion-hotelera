@@ -6,8 +6,10 @@ namespace Tests\Feature\Api;
 
 use App\Models\Cabin;
 use App\Models\CabinPriceByGuests;
+use App\Models\Client;
 use App\Models\PriceGroup;
 use App\Models\PriceRange;
+use App\Models\Reservation;
 use App\Models\Tenant;
 use Carbon\Carbon;
 use Tests\TestCase;
@@ -261,6 +263,100 @@ class PriceCalculatorApiTest extends TestCase
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['cabin_id']);
+    }
+
+    public function test_quote_excludes_current_reservation_when_reservation_id_is_sent(): void
+    {
+        $client = Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+        ]);
+
+        $reservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'client_id' => $client->id,
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow(),
+            'check_out_date' => Carbon::tomorrow()->addDays(3),
+            'status' => Reservation::STATUS_CONFIRMED,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/v1/reservations/quote', [
+                'cabin_id' => $this->cabin->id,
+                'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+                'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+                'num_guests' => 2,
+                'reservation_id' => $reservation->id,
+            ]);
+
+        $this->assertApiResponse($response);
+        $response->assertJsonPath('data.is_available', true);
+        $response->assertJsonPath('data.total', 300.0);
+    }
+
+    public function test_quote_marks_unavailable_when_overlapping_another_reservation(): void
+    {
+        $client = Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+        ]);
+
+        Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'client_id' => $client->id,
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow(),
+            'check_out_date' => Carbon::tomorrow()->addDays(3),
+            'status' => Reservation::STATUS_CONFIRMED,
+        ]);
+
+        $currentReservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'client_id' => $client->id,
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::tomorrow()->addDays(5),
+            'check_out_date' => Carbon::tomorrow()->addDays(6),
+            'status' => Reservation::STATUS_CONFIRMED,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/v1/reservations/quote', [
+                'cabin_id' => $this->cabin->id,
+                'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+                'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+                'num_guests' => 2,
+                'reservation_id' => $currentReservation->id,
+            ]);
+
+        $this->assertApiResponse($response);
+        $response->assertJsonPath('data.is_available', false);
+    }
+
+    public function test_quote_rejects_reservation_id_from_other_tenant(): void
+    {
+        $otherTenant = Tenant::factory()->create();
+        $otherClient = Client::factory()->create([
+            'tenant_id' => $otherTenant->id,
+        ]);
+        $otherCabin = Cabin::factory()->create([
+            'tenant_id' => $otherTenant->id,
+        ]);
+        $otherReservation = Reservation::factory()->create([
+            'tenant_id' => $otherTenant->id,
+            'client_id' => $otherClient->id,
+            'cabin_id' => $otherCabin->id,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/v1/reservations/quote', [
+                'cabin_id' => $this->cabin->id,
+                'check_in_date' => Carbon::tomorrow()->format('Y-m-d'),
+                'check_out_date' => Carbon::tomorrow()->addDays(3)->format('Y-m-d'),
+                'num_guests' => 2,
+                'reservation_id' => $otherReservation->id,
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['reservation_id']);
     }
 
     public function test_calculate_price_prefers_highest_priority_range_when_overlapping(): void

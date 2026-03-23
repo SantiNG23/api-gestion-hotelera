@@ -18,9 +18,11 @@ class ReservationQuoteRequest extends ApiRequest
     {
         $tenantId = Auth::user()?->tenant_id;
         $cabinExistsRule = Rule::exists('cabins', 'id');
+        $reservationExistsRule = Rule::exists('reservations', 'id');
 
         if ($tenantId !== null) {
             $cabinExistsRule = $cabinExistsRule->where('tenant_id', $tenantId);
+            $reservationExistsRule = $reservationExistsRule->where('tenant_id', $tenantId);
         }
 
         return [
@@ -28,6 +30,7 @@ class ReservationQuoteRequest extends ApiRequest
             'check_in_date' => ['required', 'date', 'date_format:Y-m-d', 'after_or_equal:today'],
             'check_out_date' => ['required', 'date', 'date_format:Y-m-d', 'after:check_in_date'],
             'num_guests' => ['required', 'integer', 'min:2', 'max:255'],
+            'reservation_id' => ['sometimes', 'integer', $reservationExistsRule],
         ];
     }
 
@@ -47,6 +50,7 @@ class ReservationQuoteRequest extends ApiRequest
             'check_out_date.required' => 'La fecha de check-out es obligatoria',
             'check_out_date.date_format' => 'La fecha de check-out debe tener el formato YYYY-MM-DD',
             'check_out_date.after' => 'La fecha de check-out debe ser posterior al check-in',
+            'reservation_id.exists' => 'La reserva no existe o no pertenece a tu organización',
         ];
     }
 }

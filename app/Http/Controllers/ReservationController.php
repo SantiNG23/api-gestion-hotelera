@@ -92,11 +92,14 @@ class ReservationController extends Controller
      */
     public function quote(ReservationQuoteRequest $request): JsonResponse
     {
+        $validated = $request->validated();
+
         $quote = $this->reservationService->generateQuote(
-            (int) $request->validated()['cabin_id'],
-            $request->validated()['check_in_date'],
-            $request->validated()['check_out_date'],
-            (int) $request->validated()['num_guests']
+            (int) $validated['cabin_id'],
+            $validated['check_in_date'],
+            $validated['check_out_date'],
+            (int) $validated['num_guests'],
+            isset($validated['reservation_id']) ? (int) $validated['reservation_id'] : null
         );
 
         return $this->successResponse($quote);
