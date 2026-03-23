@@ -219,6 +219,33 @@ class ClientApiTest extends TestCase
         $response->assertJsonCount(1, 'data');
     }
 
+    public function test_name_filter_is_case_insensitive_and_returns_all_partial_matches(): void
+    {
+        $firstClient = Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'SMOKE Cliente Lookup A',
+            'dni' => '41000001',
+        ]);
+        $secondClient = Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'SMOKE Cliente Baja A',
+            'dni' => '41000002',
+        ]);
+        Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'SMOKE Reserva Base A',
+            'dni' => '41000003',
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/clients?name=cliente&sort_by=id&sort_order=asc&per_page=10');
+
+        $this->assertPaginatedResponse($response);
+        $response->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.id', $firstClient->id)
+            ->assertJsonPath('data.1.id', $secondClient->id);
+    }
+
     public function test_can_filter_clients_by_numeric_dni_query_param(): void
     {
         $matchingClient = Client::factory()->create([
@@ -263,5 +290,52 @@ class ClientApiTest extends TestCase
             ->assertJsonPath('data.0.dni', '55667788')
             ->assertJsonPath('data.0.phone', $matchingClient->phone)
             ->assertJsonPath('data.0.email', $matchingClient->email);
+    }
+
+    public function test_simple_search_is_case_insensitive_and_matches_system_client(): void
+    {
+        $systemClient = Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'BLOQUEO DE FECHAS',
+            'dni' => Client::DNI_BLOCK,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/clients?search=blo&sort_by=id&sort_order=asc&per_page=10');
+
+        $this->assertPaginatedResponse($response);
+        $response->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $systemClient->id)
+            ->assertJsonPath('data.0.name', 'BLOQUEO DE FECHAS');
+    }
+
+    public function test_global_filter_is_case_insensitive_and_searches_all_included_columns(): void
+    {
+        $nameClient = Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'SMOKE Cliente Lookup A',
+            'dni' => '41000010',
+            'email' => 'lookup@example.com',
+        ]);
+        $emailClient = Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Otro Nombre',
+            'dni' => '41000011',
+            'email' => 'cliente.mail@example.com',
+        ]);
+        Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'SMOKE Reserva Base A',
+            'dni' => '41000012',
+            'email' => 'reserva@example.com',
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/clients?global=cliente&sort_by=id&sort_order=asc&per_page=10');
+
+        $this->assertPaginatedResponse($response);
+        $response->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.id', $nameClient->id)
+            ->assertJsonPath('data.1.id', $emailClient->id);
     }
 }

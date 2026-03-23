@@ -526,14 +526,14 @@ class ReservationService extends Service
     /**
      * Genera una cotización
      */
-    public function generateQuote(int $cabinId, string $checkIn, string $checkOut, int $numGuests): array
+    public function generateQuote(int $cabinId, string $checkIn, string $checkOut, int $numGuests, ?int $excludeReservationId = null): array
     {
         $checkInDate = Carbon::parse($checkIn);
         $checkOutDate = Carbon::parse($checkOut);
         $cabin = Cabin::findOrFail($cabinId);
 
         // Verificar disponibilidad
-        $isAvailable = $this->availabilityService->isAvailable($cabinId, $checkInDate, $checkOutDate);
+        $isAvailable = $this->availabilityService->isAvailable($cabinId, $checkInDate, $checkOutDate, $excludeReservationId);
 
         $quote = $this->priceCalculator->generateReservableQuote($cabin, $checkIn, $checkOut, $numGuests);
         $quote['is_available'] = $isAvailable;
@@ -629,19 +629,19 @@ class ReservationService extends Service
 
     protected function applySimpleSearch(Builder $query, string $value): Builder
     {
-        $value = strtolower($value);
-
         $query->where(function (Builder $searchQuery) use ($value): void {
-            $searchQuery->where('notes', 'like', "%{$value}%")
+            $this->whereTextContains($searchQuery, 'notes', $value)
                 ->orWhereHas('client', function (Builder $clientQuery) use ($value): void {
                     $clientQuery->withTrashed()
                         ->where(function (Builder $innerQuery) use ($value): void {
-                            $innerQuery->where('name', 'like', "%{$value}%")
-                                ->orWhere('dni', 'like', "%{$value}%");
+                            $this->whereTextContains($innerQuery, 'name', $value);
+                            $this->whereTextContains($innerQuery, 'dni', $value, 'or');
                         });
                 })
                 ->orWhereHas('cabin', function (Builder $cabinQuery) use ($value): void {
-                    $cabinQuery->withTrashed()->where('name', 'like', "%{$value}%");
+                    $cabinQuery->withTrashed()->where(function (Builder $innerQuery) use ($value): void {
+                        $this->whereTextContains($innerQuery, 'name', $value);
+                    });
                 });
         });
 

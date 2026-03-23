@@ -314,6 +314,66 @@ class ReservationApiTest extends TestCase
         ]);
     }
 
+    public function test_can_filter_reservations_by_global_search_on_client_name_without_unrelated_matches(): void
+    {
+        $matchingClient = Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Mateo Baravalle',
+            'dni' => '43965814',
+        ]);
+
+        $matchingReservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $matchingClient->id,
+            'notes' => 'Reserva de Mateo',
+            'status' => Reservation::STATUS_CONFIRMED,
+        ]);
+
+        Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->otherCabin->id,
+            'client_id' => $this->client->id,
+            'notes' => 'Sin coincidencia textual',
+            'status' => Reservation::STATUS_CONFIRMED,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/reservations?global=Baravalle&sort_by=id&sort_order=asc&per_page=10');
+
+        $this->assertPaginatedResponse($response);
+        $response->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $matchingReservation->id)
+            ->assertJsonPath('data.0.client.name', 'Mateo Baravalle');
+    }
+
+    public function test_can_filter_reservations_by_global_search_on_cabin_name_case_insensitive(): void
+    {
+        $this->otherCabin->update(['name' => 'Cabana Alternativa']);
+
+        $matchingReservation = Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->otherCabin->id,
+            'client_id' => $this->client->id,
+            'status' => Reservation::STATUS_CONFIRMED,
+        ]);
+
+        Reservation::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'cabin_id' => $this->cabin->id,
+            'client_id' => $this->client->id,
+            'status' => Reservation::STATUS_CONFIRMED,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/reservations?global=alternativa&sort_by=id&sort_order=asc&per_page=10');
+
+        $this->assertPaginatedResponse($response);
+        $response->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $matchingReservation->id)
+            ->assertJsonPath('data.0.cabin_id', $this->otherCabin->id);
+    }
+
     // ============= Actualización - 3 tests =============
 
     public function test_update_reservation_notes_only(): void

@@ -141,7 +141,7 @@ class ClientService extends Service
      */
     protected function filterByDni(Builder $query, string $value): Builder
     {
-        return $query->where('dni', 'like', "%{$value}%");
+        return $this->whereTextContains($query, 'dni', $value);
     }
 
     /**
@@ -150,8 +150,8 @@ class ClientService extends Service
     protected function filterByQuery(Builder $query, string $value): Builder
     {
         return $query->where(function (Builder $searchQuery) use ($value): void {
-            $searchQuery->where('name', 'like', "%{$value}%")
-                ->orWhere('dni', 'like', "%{$value}%");
+            $this->whereTextContains($searchQuery, 'name', $value);
+            $this->whereTextContains($searchQuery, 'dni', $value, 'or');
         });
     }
 
@@ -168,12 +168,10 @@ class ClientService extends Service
      */
     protected function applySimpleSearch(Builder $query, string $value): Builder
     {
-        $value = strtolower($value);
-
         $query->select(['id', 'dni', 'name', 'phone', 'email'])
             ->where(function (Builder $searchQuery) use ($value): void {
-                $searchQuery->where('name', 'like', "%{$value}%")
-                    ->orWhere('dni', 'like', "%{$value}%");
+                $this->whereTextContains($searchQuery, 'name', $value);
+                $this->whereTextContains($searchQuery, 'dni', $value, 'or');
             });
 
         return $query;

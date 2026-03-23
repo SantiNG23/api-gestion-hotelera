@@ -237,7 +237,7 @@ abstract class Service
                 }
                 // Strings -> Búsqueda parcial (LIKE)
                 elseif (is_string($value)) {
-                    $query->where($field, 'like', '%'.strtolower($value).'%');
+                    $this->whereTextContains($query, $field, $value);
                 }
             }
         }
@@ -293,15 +293,11 @@ abstract class Service
      */
     protected function applyGlobalSearch(Builder $query, string $value): Builder
     {
-        $value = strtolower($value);
-
         $query->where(function ($q) use ($value) {
-            // Aplicar búsqueda en columnas de texto
             foreach ($this->getGlobalSearchColumns() as $column) {
-                $q->orWhere($column, 'like', "%{$value}%");
+                $this->whereTextContains($q, $column, $value, 'or');
             }
 
-            // Aplicar búsqueda en relaciones
             $this->applyGlobalSearchToRelations($q, $value);
         });
 
@@ -331,9 +327,11 @@ abstract class Service
     {
         foreach ($this->getGlobalSearchRelations() as $relation => $columns) {
             $query->orWhereHas($relation, function ($q) use ($columns, $value) {
-                foreach ($columns as $column) {
-                    $q->orWhere($column, 'like', "%{$value}%");
-                }
+                $q->where(function (Builder $relationQuery) use ($columns, $value): void {
+                    foreach ($columns as $column) {
+                        $this->whereTextContains($relationQuery, $column, $value, 'or');
+                    }
+                });
             });
         }
     }
@@ -360,15 +358,12 @@ abstract class Service
      */
     protected function applySimpleSearch(Builder $query, string $value): Builder
     {
-        $value = strtolower($value);
         $nameField = $this->getSimpleSearchNameField();
         $selectFields = $this->getSimpleSearchSelectFields();
 
-        // Seleccionar los campos configurados
         $query->select($selectFields);
 
-        // Aplicar filtro en el campo de nombre
-        $query->where($nameField, 'like', "%{$value}%");
+        $this->whereTextContains($query, $nameField, $value);
 
         return $query;
     }
@@ -397,6 +392,14 @@ abstract class Service
     protected function getSimpleSearchSelectFields(): array
     {
         return ['id', $this->getSimpleSearchNameField()];
+    }
+
+    protected function whereTextContains(Builder $query, string $column, string $value, string $boolean = 'and'): Builder
+    {
+        $operator = $query->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+        $method = $boolean === 'or' ? 'orWhere' : 'where';
+
+        return $query->{$method}($column, $operator, "%{$value}%");
     }
 
     protected function requireTenantId(): int
