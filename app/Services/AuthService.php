@@ -54,6 +54,7 @@ class AuthService
             'email' => $userData['email'],
             'password' => Hash::make($userData['password']),
             'role' => $userData['role'] ?? User::ROLE_STAFF,
+            'email_verified_at' => $userData['email_verified_at'] ?? null,
             'tenant_id' => $tenant->id,
         ]);
     }
