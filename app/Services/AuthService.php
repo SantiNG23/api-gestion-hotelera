@@ -42,12 +42,19 @@ class AuthService
     public function createUser(array $userData): User
     {
         $tenantId = $this->resolveTrustedTenantId($userData);
+        $tenant = Tenant::query()->findOrFail($tenantId);
 
+        return $this->createUserForTenant($tenant, $userData);
+    }
+
+    public function createUserForTenant(Tenant $tenant, array $userData): User
+    {
         return User::create([
             'name' => $userData['name'],
             'email' => $userData['email'],
             'password' => Hash::make($userData['password']),
-            'tenant_id' => $tenantId,
+            'role' => $userData['role'] ?? User::ROLE_STAFF,
+            'tenant_id' => $tenant->id,
         ]);
     }
 
