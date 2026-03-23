@@ -33,6 +33,8 @@ class DailySummaryApiTest extends TestCase
         $response->assertJsonStructure([
             'data' => [
                 'has_events',
+                'occupied_cabins',
+                'total_cabins',
                 'check_ins' => [
                     '*' => [
                         'id',
@@ -142,6 +144,52 @@ class DailySummaryApiTest extends TestCase
 
         $this->assertApiResponse($response);
         $response->assertJsonPath('data.has_events', false);
+        $response->assertJsonPath('data.occupied_cabins', 0);
+        $response->assertJsonPath('data.total_cabins', 1);
+    }
+
+    public function test_shows_occupied_cabins_for_today(): void
+    {
+        Reservation::factory()->checkedIn()->create([
+            'tenant_id' => $this->tenant->id,
+            'client_id' => $this->client->id,
+            'cabin_id' => $this->cabin->id,
+            'check_in_date' => Carbon::today()->subDay(),
+            'check_out_date' => Carbon::today()->addDays(2),
+        ]);
+
+        Reservation::factory()->confirmed()->create([
+            'tenant_id' => $this->tenant->id,
+            'client_id' => $this->client->id,
+            'cabin_id' => Cabin::factory()->create(['tenant_id' => $this->tenant->id])->id,
+            'check_in_date' => Carbon::today()->subDay(),
+            'check_out_date' => Carbon::today()->addDays(2),
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/daily-summary');
+
+        $this->assertApiResponse($response);
+        $response->assertJsonPath('data.occupied_cabins', 1);
+    }
+
+    public function test_shows_total_active_cabins(): void
+    {
+        Cabin::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'is_active' => true,
+        ]);
+
+        Cabin::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'is_active' => false,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/v1/daily-summary');
+
+        $this->assertApiResponse($response);
+        $response->assertJsonPath('data.total_cabins', 2);
     }
 
     public function test_can_get_summary_for_specific_date(): void

@@ -24,6 +24,7 @@ class DailySummaryServiceTest extends TestCase
         parent::setUp();
         $this->service = new DailySummaryService;
         $this->localTenant = Tenant::factory()->create();
+        $this->setTenantContext($this->localTenant->id);
         $this->localCabin = Cabin::factory()->create(['tenant_id' => $this->localTenant->id]);
         $this->localClient = Client::factory()->create(['tenant_id' => $this->localTenant->id]);
     }
@@ -129,14 +130,64 @@ class DailySummaryServiceTest extends TestCase
         $summary = $this->service->getDailySummary(Carbon::today());
 
         $this->assertFalse($summary['has_events']);
+        $this->assertEquals(0, $summary['occupied_cabins']);
+        $this->assertEquals(1, $summary['total_cabins']);
         $this->assertEquals(0, $summary['check_ins']->count());
         $this->assertEquals(0, $summary['check_outs']->count());
         $this->assertEquals(0, $summary['expiring_pending']->count());
     }
 
-    public function test_check_outs_only_includes_checked_in_status(): void
+    public function test_returns_occupied_cabins_count_for_date(): void
     {
-        // Crear una reserva confirmada pero NO checked-in
+        Reservation::factory()->checkedIn()->create([
+            'tenant_id' => $this->localTenant->id,
+            'client_id' => $this->localClient->id,
+            'cabin_id' => $this->localCabin->id,
+            'check_in_date' => Carbon::today()->subDay(),
+            'check_out_date' => Carbon::today()->addDay(),
+        ]);
+
+        Reservation::factory()->confirmed()->create([
+            'tenant_id' => $this->localTenant->id,
+            'client_id' => $this->localClient->id,
+            'cabin_id' => Cabin::factory()->create(['tenant_id' => $this->localTenant->id])->id,
+            'check_in_date' => Carbon::today()->subDay(),
+            'check_out_date' => Carbon::today()->addDay(),
+        ]);
+
+        Reservation::factory()->checkedIn()->create([
+            'tenant_id' => $this->localTenant->id,
+            'client_id' => $this->localClient->id,
+            'cabin_id' => Cabin::factory()->create(['tenant_id' => $this->localTenant->id])->id,
+            'check_in_date' => Carbon::today()->subDays(3),
+            'check_out_date' => Carbon::today(),
+        ]);
+
+        $summary = $this->service->getDailySummary(Carbon::today());
+
+        $this->assertEquals(1, $summary['occupied_cabins']);
+    }
+
+    public function test_returns_total_active_cabins_count(): void
+    {
+        Cabin::factory()->create([
+            'tenant_id' => $this->localTenant->id,
+            'is_active' => true,
+        ]);
+
+        Cabin::factory()->create([
+            'tenant_id' => $this->localTenant->id,
+            'is_active' => false,
+        ]);
+
+        $summary = $this->service->getDailySummary(Carbon::today());
+
+        $this->assertEquals(2, $summary['total_cabins']);
+    }
+
+    public function test_check_outs_includes_confirmed_status_when_checkout_is_today(): void
+    {
+        // Una reserva confirmada con check-out hoy igual debe aparecer en el resumen
         Reservation::factory()->confirmed()->create([
             'tenant_id' => $this->localTenant->id,
             'client_id' => $this->localClient->id,
@@ -147,8 +198,7 @@ class DailySummaryServiceTest extends TestCase
 
         $summary = $this->service->getDailySummary(Carbon::today());
 
-        // No debe incluirse en check_outs porque solo está confirmada
-        $this->assertEquals(0, $summary['check_outs']->count());
+        $this->assertEquals(1, $summary['check_outs']->count());
     }
 
     public function test_multiple_events_in_same_day(): void

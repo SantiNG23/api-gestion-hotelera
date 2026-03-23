@@ -21,12 +21,14 @@ class DailySummaryService
      * Genera el resumen diario
      *
      * @param  Carbon|null  $date  Fecha para el resumen (default: hoy)
-     * @return array{has_events: bool, check_ins: Collection, check_outs: Collection, expiring_pending: Collection, summary: array}
+     * @return array{has_events: bool, occupied_cabins: int, total_cabins: int, check_ins: Collection, check_outs: Collection, expiring_pending: Collection}
      */
     public function getDailySummary(?Carbon $date = null): array
     {
         $date = $date ?? Carbon::today();
 
+        $occupiedCabins = $this->getOccupiedCabinsCountForDate($date);
+        $totalCabins = $this->getTotalCabinsCount();
         $checkIns = $this->getCheckInsForDate($date);
         $checkOuts = $this->getCheckOutsForDate($date);
         $expiringPending = $this->getExpiringPendingReservations($date);
@@ -37,10 +39,30 @@ class DailySummaryService
 
         return [
             'has_events' => $hasEvents,
+            'occupied_cabins' => $occupiedCabins,
+            'total_cabins' => $totalCabins,
             'check_ins' => $checkIns,
             'check_outs' => $checkOuts,
             'expiring_pending' => $expiringPending,
         ];
+    }
+
+    public function getOccupiedCabinsCountForDate(Carbon $date): int
+    {
+        return Reservation::query()
+            ->where('is_blocked', false)
+            ->where('status', Reservation::STATUS_CHECKED_IN)
+            ->whereDate('check_in_date', '<=', $date)
+            ->whereDate('check_out_date', '>', $date)
+            ->distinct('cabin_id')
+            ->count('cabin_id');
+    }
+
+    public function getTotalCabinsCount(): int
+    {
+        return Cabin::query()
+            ->where('is_active', true)
+            ->count();
     }
 
     /**
