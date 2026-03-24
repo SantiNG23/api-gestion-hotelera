@@ -18,6 +18,9 @@ class User extends Authenticatable
     use HasFactory;
     use Notifiable;
 
+    public const ROLE_OWNER = 'owner';
+    public const ROLE_STAFF = 'staff';
+
     protected static function booted(): void
     {
         static::saving(function (self $user): void {
@@ -53,7 +56,9 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'email_verified_at',
         'password',
+        'role',
         'tenant_id',
     ];
 
@@ -76,6 +81,11 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
     ];
+
+    public function isOwner(): bool
+    {
+        return $this->role === self::ROLE_OWNER;
+    }
 
     /**
      * Relación con el tenant

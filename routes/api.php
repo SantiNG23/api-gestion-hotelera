@@ -10,6 +10,7 @@ use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DailySummaryController;
 use App\Http\Controllers\FeatureController;
 use App\Http\Controllers\FrontendLogController;
+use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\PriceGroupController;
 use App\Http\Controllers\PriceRangeController;
 use App\Http\Controllers\ReportsGuestController;
@@ -20,6 +21,7 @@ use App\Http\Controllers\ReportsSummaryController;
 use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\UserController;
 use App\Http\Middleware\FrontendObservabilityRateLimiter;
+use App\Http\Middleware\OnboardingRateLimiter;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -38,6 +40,10 @@ Route::prefix('v1')->group(function () {
     // Rutas de autenticación
     Route::post('/auth/discover', [AuthController::class, 'discover'])->name('auth.discover');
     Route::post('/auth/login', [AuthController::class, 'login'])->name('auth.login');
+    Route::middleware(OnboardingRateLimiter::class)->prefix('/auth/onboarding')->name('auth.onboarding.')->group(function () {
+        Route::post('/resolve', [OnboardingController::class, 'resolve'])->name('resolve');
+        Route::post('/complete', [OnboardingController::class, 'complete'])->name('complete');
+    });
     Route::get('/auth', [AuthController::class, 'show'])->middleware('auth:sanctum')->name('auth.show');
     Route::delete('/auth', [AuthController::class, 'destroy'])->middleware('auth:sanctum')->name('auth.destroy');
 

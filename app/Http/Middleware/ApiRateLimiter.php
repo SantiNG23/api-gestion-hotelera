@@ -29,7 +29,7 @@ class ApiRateLimiter
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->routeIs('observability.frontend-logs.store')) {
+        if ($request->routeIs('observability.frontend-logs.store') || $request->routeIs('auth.onboarding.*')) {
             return $next($request);
         }
 

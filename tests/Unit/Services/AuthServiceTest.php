@@ -7,6 +7,7 @@ namespace Tests\Unit\Services;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\AuthService;
+use App\Services\Onboarding\CompleteOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -41,6 +42,56 @@ class AuthServiceTest extends TestCase
 
         $result = $this->authService->validateCredentials('test@example.com', 'wrongpassword', $tenant->id);
         $this->assertFalse($result);
+    }
+
+    #[Test]
+    public function it_creates_a_user_for_an_explicit_tenant_without_touching_the_default_tenant_fallback(): void
+    {
+        $tenant = Tenant::factory()->create();
+
+        $user = $this->authService->createUserForTenant($tenant, [
+            'name' => 'Owner Bootstrap',
+            'email' => 'owner@example.com',
+            'password' => 'Secret123!',
+            'role' => User::ROLE_OWNER,
+        ]);
+
+        $this->assertSame($tenant->id, $user->tenant_id);
+        $this->assertSame(User::ROLE_OWNER, $user->role);
+        $this->assertDatabaseMissing('tenants', ['slug' => 'default-tenant']);
+    }
+
+    #[Test]
+    public function it_keeps_the_existing_default_tenant_bootstrap_for_legacy_auth_flows(): void
+    {
+        $user = $this->authService->createUser([
+            'name' => 'Legacy User',
+            'email' => 'legacy@example.com',
+            'password' => 'Secret123!',
+        ]);
+
+        $defaultTenant = Tenant::query()->where('slug', 'default-tenant')->first();
+
+        $this->assertNotNull($defaultTenant);
+        $this->assertSame($defaultTenant->id, $user->tenant_id);
+        $this->assertSame(User::ROLE_STAFF, $user->role);
+    }
+
+    #[Test]
+    public function complete_onboarding_service_creates_the_owner_in_the_explicit_tenant(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $service = app(CompleteOnboardingService::class);
+
+        $user = $service->createOwnerForTenant($tenant, [
+            'name' => 'Owner Bootstrap',
+            'email' => 'owner@example.com',
+            'password' => 'Secret123!',
+        ]);
+
+        $this->assertSame($tenant->id, $user->tenant_id);
+        $this->assertSame(User::ROLE_OWNER, $user->role);
+        $this->assertTrue($user->isOwner());
     }
 
     #[Test]

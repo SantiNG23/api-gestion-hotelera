@@ -19,6 +19,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->trimStrings([
+            'user.password',
+            'user.password_confirmation',
+        ]);
+
         $middleware->api([
             ValidateApiHeaders::class,
             ApiRateLimiter::class,

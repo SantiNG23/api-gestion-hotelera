@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Models;
 
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -16,9 +17,12 @@ class UserTest extends TestCase
     #[Test]
     public function it_can_create_a_user()
     {
+        $tenant = Tenant::factory()->create();
+
         $user = User::factory()->create([
             'name' => 'Test User',
             'email' => 'test@example.com',
+            'tenant_id' => $tenant->id,
         ]);
 
         $this->assertInstanceOf(User::class, $user);
@@ -32,6 +36,15 @@ class UserTest extends TestCase
         $this->expectException(\Illuminate\Database\QueryException::class);
 
         User::create([]);
+    }
+
+    #[Test]
+    public function it_persists_the_role_attribute(): void
+    {
+        $user = User::factory()->owner()->create();
+
+        $this->assertSame(User::ROLE_OWNER, $user->role);
+        $this->assertTrue($user->isOwner());
     }
 
     #[Test]

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Auth;
 
+use App\Models\OnboardingInvitation;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Onboarding\OnboardingTokenService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use PHPUnit\Framework\Attributes\Test;
@@ -119,6 +121,23 @@ class AuthTest extends TestCase
     }
 
     #[Test]
+    public function it_does_not_contaminate_discover_with_pending_onboarding_invitations(): void
+    {
+        OnboardingInvitation::factory()->create([
+            'email' => 'owner@cliente.com',
+            'token_hash' => app(OnboardingTokenService::class)->hashToken('btp_live_pending_discover'),
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/discover', [
+            'email' => 'owner@cliente.com',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.mode', 'not_found')
+            ->assertJsonPath('data.tenants', []);
+    }
+
+    #[Test]
     public function it_logs_in_with_an_explicit_tenant_slug(): void
     {
         $tenant = Tenant::factory()->create([
@@ -165,6 +184,33 @@ class AuthTest extends TestCase
             ]);
 
         $this->assertStringContainsString('|', $response->json('data.token'));
+    }
+
+    #[Test]
+    public function it_allows_the_owner_created_by_onboarding_to_login_through_legacy_auth(): void
+    {
+        $tenant = Tenant::factory()->create([
+            'name' => 'Hotel Demo',
+            'slug' => 'hotel-demo',
+        ]);
+
+        User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Juan Perez',
+            'email' => 'owner@cliente.com',
+            'password' => Hash::make('Secret123!'),
+            'role' => User::ROLE_OWNER,
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/login', [
+            'email' => 'owner@cliente.com',
+            'password' => 'Secret123!',
+            'tenant_slug' => 'hotel-demo',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.user.email', 'owner@cliente.com')
+            ->assertJsonPath('data.tenant.slug', 'hotel-demo');
     }
 
     #[Test]
