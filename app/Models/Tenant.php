@@ -13,10 +13,18 @@ class Tenant extends Model
 
     protected $table = 'tenants';
 
+    protected $hidden = [
+        'deleted_at',
+        'created_at',
+        'updated_at',
+        'public_quote_token_hash',
+    ];
+
     protected $fillable = [
         'name',
         'slug',
         'is_active',
+        'public_quote_token_hash',
     ];
 
     protected $casts = [
