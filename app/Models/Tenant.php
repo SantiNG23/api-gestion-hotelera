@@ -24,7 +24,6 @@ class Tenant extends Model
         'name',
         'slug',
         'is_active',
-        'public_quote_token_hash',
     ];
 
     protected $casts = [

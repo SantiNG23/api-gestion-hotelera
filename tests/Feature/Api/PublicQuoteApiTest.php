@@ -29,7 +29,7 @@ class PublicQuoteApiTest extends TestCase
         $tokenService = app(PublicQuoteTokenService::class);
         $this->plainTextToken = $tokenService->generatePlainTextToken();
 
-        $this->tenant = Tenant::factory()->create([
+        $this->tenant = $this->createTenant([
             'slug' => 'mirador-publico',
             'is_active' => true,
             'public_quote_token_hash' => $tokenService->hashToken($this->plainTextToken),
