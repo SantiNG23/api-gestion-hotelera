@@ -189,6 +189,20 @@ Content-Type: application/json
 Accept: application/json
 ```
 
+Para el endpoint publico de cotizacion server-side:
+
+```http
+Content-Type: application/json
+Accept: application/json
+X-Public-Quote-Token: {public_quote_token}
+```
+
+Importante:
+
+- Este token NO debe exponerse en el browser.
+- La integracion esperada es `frontend -> API route server-side (Astro) -> backend Laravel`.
+- Si el token se regenera con `php artisan quote:issue-public-token {tenant-slug}`, el anterior queda invalido.
+
 ### Autenticados
 
 ```http
@@ -326,6 +340,7 @@ Shape habitual de `price_range`:
 
 | Metodo | Ruta | Auth | Uso principal |
 | --- | --- | --- | --- |
+| POST | `/public/tenants/{tenant_slug}/quote` | Token publico server-side | Cotizacion publica para landing |
 | POST | `/reservations/calculate-price` | Si | Calculo de precio |
 | POST | `/reservations/quote` | Si | Cotizacion previa |
 | GET/POST | `/reservations` | Si | CRUD reservas |
@@ -360,6 +375,89 @@ Shape habitual de `reservation`:
   "payments": []
 }
 ```
+
+### `POST /public/tenants/{tenant_slug}/quote`
+
+Cotizacion publica minima pensada para consumo server-side desde la landing de un tenant.
+
+Autenticacion:
+
+- No usa Bearer token.
+- Requiere header `X-Public-Quote-Token: {public_quote_token}`.
+- El token se valida contra el tenant activo resuelto por `tenant_slug`.
+- El token debe vivir en variables de entorno del servidor intermedio (por ejemplo Astro SSR / API route), NO en el browser.
+
+Headers requeridos:
+
+```http
+Content-Type: application/json
+Accept: application/json
+X-Public-Quote-Token: {public_quote_token}
+```
+
+Request:
+
+```json
+{
+  "cabin_id": 3,
+  "check_in_date": "2026-04-10",
+  "check_out_date": "2026-04-15",
+  "num_guests": 4
+}
+```
+
+Validaciones:
+
+- `tenant_slug`: obligatorio en la URL; debe corresponder a un tenant activo.
+- `cabin_id`: obligatorio, entero, y debe pertenecer al tenant indicado.
+- `check_in_date`: obligatoria, formato `YYYY-MM-DD`, hoy o posterior.
+- `check_out_date`: obligatoria, formato `YYYY-MM-DD`, posterior a `check_in_date`.
+- `num_guests`: obligatorio, entero, minimo `2`, maximo `255`.
+- `reservation_id`: prohibido en este endpoint.
+- Si la cabaña no soporta la cantidad de huespedes o no hay tarifa configurada, responde `422`.
+
+Response exitosa:
+
+```json
+{
+  "success": true,
+  "message": "Operacion exitosa",
+  "data": {
+    "cabin_id": 3,
+    "check_in": "2026-04-10",
+    "check_out": "2026-04-15",
+    "total": 1500.0,
+    "deposit": 750.0,
+    "balance": 750.0,
+    "nights": 5,
+    "breakdown": [
+      {
+        "date": "2026-04-10",
+        "price": 300.0,
+        "price_group": "Temporada alta"
+      }
+    ]
+  }
+}
+```
+
+Notas de contrato:
+
+- Este endpoint NO devuelve `is_available`.
+- Este endpoint NO reserva ni bloquea fechas; solo cotiza pricing.
+- La forma de respuesta sigue el contrato historico del quote autenticado: `check_in`, `check_out`, `total`, `deposit`, `balance`.
+
+Errores funcionales a contemplar:
+
+- `401` con `errors.code = ["invalid_public_quote_token"]` si el token es invalido o falta.
+- `404` con `errors.code = ["tenant_not_found"]` si el tenant no existe o esta inactivo.
+- `422` con errores por campo si el payload es invalido o la cabaña no pertenece al tenant.
+- `429` si excede el rate limit del endpoint.
+
+Rate limiting:
+
+- `10 requests/minuto` por combinacion `IP + tenant_slug`.
+- Devuelve headers `X-RateLimit-Limit`, `X-RateLimit-Remaining` y `X-RateLimit-Reset`.
 
 Nota para reportes:
 

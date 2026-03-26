@@ -13,6 +13,7 @@ use App\Http\Controllers\FrontendLogController;
 use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\PriceGroupController;
 use App\Http\Controllers\PriceRangeController;
+use App\Http\Controllers\PublicQuoteController;
 use App\Http\Controllers\ReportsGuestController;
 use App\Http\Controllers\ReportsHistoryDniController;
 use App\Http\Controllers\ReportsOccupancyController;
@@ -20,8 +21,10 @@ use App\Http\Controllers\ReportsReservationController;
 use App\Http\Controllers\ReportsSummaryController;
 use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\UserController;
+use App\Http\Middleware\AuthenticatePublicQuoteTenant;
 use App\Http\Middleware\FrontendObservabilityRateLimiter;
 use App\Http\Middleware\OnboardingRateLimiter;
+use App\Http\Middleware\PublicQuoteRateLimiter;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -37,6 +40,13 @@ use Illuminate\Support\Facades\Route;
 
 // API v1 Routes
 Route::prefix('v1')->group(function () {
+    Route::prefix('public/tenants/{tenant_slug}')
+        ->middleware([PublicQuoteRateLimiter::class, AuthenticatePublicQuoteTenant::class])
+        ->name('public.tenants.')
+        ->group(function () {
+            Route::post('quote', [PublicQuoteController::class, 'store'])->name('quote');
+        });
+
     // Rutas de autenticación
     Route::post('/auth/discover', [AuthController::class, 'discover'])->name('auth.discover');
     Route::post('/auth/login', [AuthController::class, 'login'])->name('auth.login');
